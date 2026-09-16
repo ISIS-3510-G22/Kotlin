@@ -4,44 +4,27 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import com.example.plansync.ui.LoginScreen
 import com.example.plansync.ui.theme.PlanSyncTheme
 
+/**
+ * UI layer — single Activity, entry point of the application.
+ *
+ * Hosts the Compose content tree inside PlanSyncTheme. Navigation between
+ * screens will be added in milestone v0.2 (Jetpack Navigation component);
+ * for now LoginScreen is the only screen.
+ *
+ * Following MVVM, this Activity does not create or hold any ViewModel directly —
+ * that is handled inside each screen Composable via the viewModel() factory.
+ */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             PlanSyncTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                LoginScreen()
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    PlanSyncTheme {
-        Greeting("Android")
     }
 }
