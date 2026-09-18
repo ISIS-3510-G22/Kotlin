@@ -64,7 +64,11 @@ class MainActivity : ComponentActivity() {
 
                     Screen.PROFILE -> ProfileScreen(
                         onLoggedOut = {currentScreen = Screen.LOGIN},
-                        onExploreSelected = { currentScreen = Screen.EXPLORE}
+                        onExploreSelected = { currentScreen = Screen.EXPLORE},
+                        onPlanSelected = { planId ->
+                            selectedPlanId = planId
+                            currentScreen = Screen.PLAN_DETAIL
+                        }
                     )
                 }
             }

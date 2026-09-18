@@ -22,7 +22,8 @@ import com.example.plansync.viewmodel.ProfileViewModel
 fun ProfileScreen(
     viewModel: ProfileViewModel = viewModel(),
     onLoggedOut: () -> Unit = {},
-    onExploreSelected: () -> Unit = {}
+    onExploreSelected: () -> Unit = {},
+    onPlanSelected: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedNavIndex by remember { mutableIntStateOf(4) }
@@ -39,13 +40,12 @@ fun ProfileScreen(
         bottomBar = {
             ProfileBottomBar(
                 selectedIndex = selectedNavIndex,
-                onSelect = {  index ->
-                if (index == 0){
-                    onExploreSelected()
-                } else {
-                    selectedNavIndex = index
-                }
-
+                onSelect = { index ->
+                    when (index) {
+                        0 -> onExploreSelected()
+                        1 -> onPlanSelected("plan-001")
+                        else -> selectedNavIndex = index
+                    }
                 }
             )
         }
