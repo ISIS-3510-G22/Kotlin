@@ -87,7 +87,7 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Text(
-                    text = uiState.user?.name ?: "",
+                    text = "${uiState.user?.name.orEmpty()} ${uiState.user?.lastName.orEmpty()}".trim(),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )

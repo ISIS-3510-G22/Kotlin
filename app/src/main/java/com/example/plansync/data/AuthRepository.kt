@@ -93,12 +93,32 @@ class AuthRepository {
                     }
 
      //Returns the current user or null if there's no active session.
-    fun getCurrentUser(): User? {
+    suspend fun getCurrentUser(): User? {
         val firebaseUser = auth.currentUser ?: return null
-        return User(
+        val fallback = User(
             id = firebaseUser.uid,
             name = firebaseUser.displayName ?: "User",
             email = firebaseUser.email ?: ""
         )
+        return suspendCancellableCoroutine { continuation ->
+            Firebase.firestore.collection("users").document(firebaseUser.uid).get()
+                .addOnSuccessListener { document ->
+                    if (!document.exists()) {
+                        continuation.resume(fallback)
+                        return@addOnSuccessListener
+                    }
+                    continuation.resume(
+                        User(
+                            id = firebaseUser.uid,
+                            name = document.getString("name") ?: fallback.name,
+                            email = document.getString("email") ?: fallback.email,
+                            lastName = document.getString("lastName") ?: "",
+                            username = document.getString("username") ?: "",
+                            phone = document.getString("phone") ?: ""
+                        )
+                    )
+                }
+                .addOnFailureListener { continuation.resume(fallback) }
+        }
     }
 }
