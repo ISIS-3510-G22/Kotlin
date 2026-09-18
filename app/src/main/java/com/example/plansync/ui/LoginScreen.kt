@@ -71,7 +71,10 @@ fun LoginScreen(
     // loggedInUser transitions from null to a value, avoiding side-effects
     // inside the Composable body which can recompose freely
     LaunchedEffect(uiState.loggedInUser) {
-        if (uiState.loggedInUser != null) onLoginSuccess()
+        if (uiState.loggedInUser != null) {
+        onLoginSuccess()
+        viewModel.onLoginHandled()
+        }
     }
 
     // Local UI-only state — show/hide password has no business logic value,

@@ -12,6 +12,7 @@ import com.example.plansync.ui.LoginScreen
 import com.example.plansync.ui.PlanDetailScreen
 import com.example.plansync.ui.theme.PlanSyncTheme
 import com.example.plansync.ui.ExploreScreen
+import com.example.plansync.ui.ProfileScreen
 
 /**
  * UI layer — single Activity, entry point of the application.
@@ -44,11 +45,17 @@ class MainActivity : ComponentActivity() {
                         onPlanSelected = {planId ->
                             selectedPlanId = planId
                             currentScreen = Screen.PLAN_DETAIL
-                        }
+                        },
+                        onProfileSelected = {currentScreen = Screen.PROFILE}
                     )
                     Screen.PLAN_DETAIL -> PlanDetailScreen(
                         planId = selectedPlanId,
                         onBack = { currentScreen = Screen.LOGIN }
+                    )
+
+                    Screen.PROFILE -> ProfileScreen(
+                        onLoggedOut = {currentScreen = Screen.LOGIN},
+                        onExploreSelected = { currentScreen = Screen.EXPLORE}
                     )
                 }
             }
@@ -60,4 +67,4 @@ class MainActivity : ComponentActivity() {
  * UI layer — represents the set of top-level screens in the app.
  * Will be replaced by a NavGraph destination in milestone v0.3.
  */
-enum class Screen { LOGIN, EXPLORE, PLAN_DETAIL }
+enum class Screen { LOGIN, EXPLORE, PLAN_DETAIL, PROFILE}

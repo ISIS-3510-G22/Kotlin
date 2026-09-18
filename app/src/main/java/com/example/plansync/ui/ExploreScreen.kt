@@ -31,7 +31,8 @@ import com.example.plansync.model.Plan
 import com.example.plansync.viewmodel.ExploreViewModel
 
 @Composable
-fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (String) -> Unit = {}) {
+fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (String) -> Unit = {},
+                onProfileSelected: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedNavIndex by remember { mutableIntStateOf(0) }
 
@@ -44,11 +45,11 @@ fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (St
             ExploreBottomBar(
                 selectedIndex = selectedNavIndex,
                 onSelect = { index -> 
-                    if (index == 1){
-                        onPlanSelected("plan-001")
-                    }else{
-                        selectedNavIndex = index
-                    }}
+                    when (index) {
+                        1 -> onPlanSelected("plan-001")
+                        4 -> onProfileSelected()
+                        else -> selectedNavIndex = index
+    }}
             )
         }
     ) { innerPadding ->
