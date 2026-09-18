@@ -4,6 +4,8 @@ import com.example.plansync.model.User
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
+import com.google.firebase.Firebase
+import com.google.firebase.firestore.firestore
 
 /**
  * Data layer — Repository pattern.
@@ -63,7 +65,33 @@ class AuthRepository {
         auth.signOut()
     }
 
-    
+
+    //Creates profile in Firebase
+
+    suspend fun signUp(name: String, lastName:String, username: String, phone: String, email: String,
+                        password: String): Result<User> = suspendCancellableCoroutine { continuation ->
+                        auth.createUserWithEmailAndPassword(email, password).addOnSuccessListener{
+                            authResult -> val firebaseUser = authResult.user
+                            if (firebaseUser == null){
+                                continuation.resume(Result.failure(Exception("Sign up failed. Please try again.")))
+                                return@addOnSuccessListener
+                            }
+                            val user = User(
+                                id = firebaseUser.uid,
+                                name = name,
+                                lastName = lastName,
+                                username = username,
+                                phone = phone,
+                                email = email
+                            )
+                            Firebase.firestore.collection("users").document(user.id).set(user)
+                            .addOnSuccessListener{continuation.resume(Result.success(user))}
+                            .addOnFailureListener{e -> continuation.resume(Result.failure(e))}
+                        }
+                        .addOnFailureListener{exception -> continuation.resume(Result.failure(Exception(exception.message?: "Sign up failed.")))
+                        }
+                    }
+
      //Returns the current user or null if there's no active session.
     fun getCurrentUser(): User? {
         val firebaseUser = auth.currentUser ?: return null

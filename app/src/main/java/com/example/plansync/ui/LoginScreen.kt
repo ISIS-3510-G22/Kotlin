@@ -63,7 +63,8 @@ import com.example.plansync.viewmodel.LoginViewModel
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel = viewModel(),
-    onLoginSuccess: () -> Unit = {}
+    onLoginSuccess: () -> Unit = {},
+    onSignUpClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -261,7 +262,7 @@ fun LoginScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF444444)
                     )
-                    TextButton(onClick = { /* TODO: navigate to sign-up */ }) {
+                    TextButton(onClick = onSignUpClick) {
                         Text(
                             text = "Sign Up",
                             color = Coral,

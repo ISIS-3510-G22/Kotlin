@@ -13,6 +13,7 @@ import com.example.plansync.ui.PlanDetailScreen
 import com.example.plansync.ui.theme.PlanSyncTheme
 import com.example.plansync.ui.ExploreScreen
 import com.example.plansync.ui.ProfileScreen
+import com.example.plansync.ui.SignUpScreen
 
 /**
  * UI layer — single Activity, entry point of the application.
@@ -39,8 +40,16 @@ class MainActivity : ComponentActivity() {
 
                 when (currentScreen) {
                     Screen.LOGIN -> LoginScreen(
-                        onLoginSuccess = { currentScreen = Screen.EXPLORE }
+                        onLoginSuccess = { currentScreen = Screen.EXPLORE },
+                        onSignUpClick = {currentScreen = Screen.SIGN_UP}
                     )
+
+                    Screen.SIGN_UP -> SignUpScreen(
+                        onProfileCreated = {currentScreen = Screen.EXPLORE},
+                        onCancel = {currentScreen = Screen.LOGIN}
+                        
+                    )
+
                     Screen.EXPLORE -> ExploreScreen(
                         onPlanSelected = {planId ->
                             selectedPlanId = planId
@@ -67,4 +76,4 @@ class MainActivity : ComponentActivity() {
  * UI layer — represents the set of top-level screens in the app.
  * Will be replaced by a NavGraph destination in milestone v0.3.
  */
-enum class Screen { LOGIN, EXPLORE, PLAN_DETAIL, PROFILE}
+enum class Screen { LOGIN, EXPLORE, PLAN_DETAIL, PROFILE, SIGN_UP}
