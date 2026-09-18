@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import com.example.plansync.ui.LoginScreen
 import com.example.plansync.ui.PlanDetailScreen
 import com.example.plansync.ui.theme.PlanSyncTheme
+import com.example.plansync.ui.ExploreScreen
 
 /**
  * UI layer — single Activity, entry point of the application.
@@ -33,13 +34,20 @@ class MainActivity : ComponentActivity() {
 
                 // Tracks which screen is shown; starts on Login
                 var currentScreen by remember { mutableStateOf(Screen.LOGIN) }
+                var selectedPlanId by remember {mutableStateOf("plan-001")}
 
                 when (currentScreen) {
                     Screen.LOGIN -> LoginScreen(
-                        onLoginSuccess = { currentScreen = Screen.PLAN_DETAIL }
+                        onLoginSuccess = { currentScreen = Screen.EXPLORE }
+                    )
+                    Screen.EXPLORE -> ExploreScreen(
+                        onPlanSelected = {planId ->
+                            selectedPlanId = planId
+                            currentScreen = Screen.PLAN_DETAIL
+                        }
                     )
                     Screen.PLAN_DETAIL -> PlanDetailScreen(
-                        planId = "plan-001",
+                        planId = selectedPlanId,
                         onBack = { currentScreen = Screen.LOGIN }
                     )
                 }
@@ -52,4 +60,4 @@ class MainActivity : ComponentActivity() {
  * UI layer — represents the set of top-level screens in the app.
  * Will be replaced by a NavGraph destination in milestone v0.3.
  */
-enum class Screen { LOGIN, PLAN_DETAIL }
+enum class Screen { LOGIN, EXPLORE, PLAN_DETAIL }

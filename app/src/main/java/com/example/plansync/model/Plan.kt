@@ -10,8 +10,19 @@ data class Plan(
     val date: String,
     val estimatedCostPerPerson: Int,
     val participants: List<Participant>,
-    val activities: List<Activity>
+    val activities: List<Activity>,
+    val rating: Double = 0.0,
+    val category: String = "",
+    val planType: String = ""
 ) {
     /** Derived property — keeps the activity count in sync automatically. */
     val activityCount: Int get() = activities.size
+
+    /** Derived property — buckets [estimatedCostPerPerson] into a price tier chip label. */
+    val priceTier: String get() = when {
+        estimatedCostPerPerson <= 0 -> "Free"
+        estimatedCostPerPerson <= 30 -> "$"
+        estimatedCostPerPerson <= 80 -> "$$"
+        else -> "$$$"
+    }
 }
