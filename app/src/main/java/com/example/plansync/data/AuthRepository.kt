@@ -62,4 +62,15 @@ class AuthRepository {
     fun signOut() {
         auth.signOut()
     }
+
+    
+     //Returns the current user or null if there's no active session.
+    fun getCurrentUser(): User? {
+        val firebaseUser = auth.currentUser ?: return null
+        return User(
+            id = firebaseUser.uid,
+            name = firebaseUser.displayName ?: "User",
+            email = firebaseUser.email ?: ""
+        )
+    }
 }

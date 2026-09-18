@@ -88,4 +88,8 @@ class LoginViewModel(
                 }
         }
     }
+
+    fun onLoginHandled() {
+        _uiState.update{ it.copy(loggedInUser = null)}
+    }
 }
