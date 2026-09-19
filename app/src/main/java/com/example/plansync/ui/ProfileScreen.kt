@@ -23,7 +23,8 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = viewModel(),
     onLoggedOut: () -> Unit = {},
     onExploreSelected: () -> Unit = {},
-    onPlanSelected: (String) -> Unit = {}
+    onPlanSelected: (String) -> Unit = {},
+    onMyPlansSelected: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedNavIndex by remember { mutableIntStateOf(4) }
@@ -43,7 +44,7 @@ fun ProfileScreen(
                 onSelect = { index ->
                     when (index) {
                         0 -> onExploreSelected()
-                        1 -> onPlanSelected("plan-001")
+                        1 -> onMyPlansSelected()
                         else -> selectedNavIndex = index
                     }
                 }
