@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.example.plansync.ui.LoginScreen
+import com.example.plansync.ui.MyCrewScreen
 import com.example.plansync.ui.MyPlansScreen
 import com.example.plansync.ui.PlanDetailScreen
 import com.example.plansync.ui.theme.PlanSyncTheme
@@ -45,11 +46,12 @@ class MainActivity : ComponentActivity() {
                             currentScreen = Screen.PLAN_DETAIL
                         },
                         onProfileSelected = {currentScreen = Screen.PROFILE},
-                        onMyPlansSelected = {currentScreen = Screen.MY_PLANS}
+                        onMyPlansSelected = {currentScreen = Screen.MY_PLANS},
+                        onMyCrewSelected = {currentScreen = Screen.MY_CREW}
                     )
                     Screen.PLAN_DETAIL -> PlanDetailScreen(
                         planId = selectedPlanId,
-                        onBack = { currentScreen = Screen.LOGIN }
+                        onBack = { currentScreen = Screen.EXPLORE }
                     )
 
                     Screen.PROFILE -> ProfileScreen(
@@ -59,11 +61,19 @@ class MainActivity : ComponentActivity() {
                             selectedPlanId = planId
                             currentScreen = Screen.PLAN_DETAIL
                         },
-                        onMyPlansSelected = {currentScreen = Screen.MY_PLANS}
+                        onMyPlansSelected = {currentScreen = Screen.MY_PLANS},
+                        onMyCrewSelected = {currentScreen = Screen.MY_CREW}
                     )
 
                     Screen.MY_PLANS -> MyPlansScreen(
                         onExploreSelected = {currentScreen = Screen.EXPLORE},
+                        onProfileSelected = {currentScreen = Screen.PROFILE},
+                        onMyCrewSelected = {currentScreen = Screen.MY_CREW}
+                    )
+
+                    Screen.MY_CREW -> MyCrewScreen(
+                        onExploreSelected = {currentScreen = Screen.EXPLORE},
+                        onMyPlansSelected = {currentScreen = Screen.MY_PLANS},
                         onProfileSelected = {currentScreen = Screen.PROFILE}
                     )
                 }
@@ -72,4 +82,4 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class Screen { LOGIN, EXPLORE, PLAN_DETAIL, PROFILE, SIGN_UP, MY_PLANS}
+enum class Screen { LOGIN, EXPLORE, PLAN_DETAIL, PROFILE, SIGN_UP, MY_PLANS, MY_CREW}

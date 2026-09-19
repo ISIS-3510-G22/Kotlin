@@ -35,7 +35,8 @@ import com.example.plansync.viewmodel.MyPlansViewModel
 fun MyPlansScreen(
     viewModel: MyPlansViewModel = viewModel(),
     onExploreSelected: () -> Unit = {},
-    onProfileSelected: () -> Unit = {}
+    onProfileSelected: () -> Unit = {},
+    onMyCrewSelected: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -47,7 +48,8 @@ fun MyPlansScreen(
         bottomBar = {
             MyPlansBottomBar(
                 onExploreSelected = onExploreSelected,
-                onProfileSelected = onProfileSelected
+                onProfileSelected = onProfileSelected,
+                onMyCrewSelected = onMyCrewSelected
             )
         }
     ) { innerPadding ->
@@ -404,7 +406,8 @@ private val myPlansNavItems = listOf(
 @Composable
 private fun MyPlansBottomBar(
     onExploreSelected: () -> Unit,
-    onProfileSelected: () -> Unit
+    onProfileSelected: () -> Unit,
+    onMyCrewSelected: () -> Unit
 ) {
     var selectedIndex by remember { mutableIntStateOf(1) }
 
@@ -415,6 +418,7 @@ private fun MyPlansBottomBar(
                 onClick = {
                     when (index) {
                         0 -> onExploreSelected()
+                        3 -> onMyCrewSelected()
                         4 -> onProfileSelected()
                         else -> selectedIndex = index
                     }
