@@ -159,11 +159,20 @@ fun InviteScreen(
     }
 
     // ── Invite confirmation dialog ─────────────────────────────────────────
-    // Shown when ViewModel sets a pendingInviteContact.
-    // The actual dialog composables live in InviteDialogs.kt (Issue #12).
-    // Placeholder: auto-confirm for now so the flow is testable end-to-end.
-    uiState.pendingInviteContact?.let {
-        viewModel.onInviteConfirmed(planId)
+    uiState.pendingInviteContact?.let { contact ->
+        if (contact.isGroup) {
+            InviteGroupDialog(
+                contact = contact,
+                onConfirm = { viewModel.onInviteConfirmed(planId) },
+                onDismiss = { viewModel.onDialogDismissed() }
+            )
+        } else {
+            InvitePersonDialog(
+                contact = contact,
+                onConfirm = { viewModel.onInviteConfirmed(planId) },
+                onDismiss = { viewModel.onDialogDismissed() }
+            )
+        }
     }
 }
 

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.model.Plan
+import com.example.plansync.model.PlanStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +33,8 @@ class PlanDetailViewModel(
     data class UiState(
         val plan: Plan? = null,
         val isLoading: Boolean = false,
-        val errorMessage: String? = null
+        val errorMessage: String? = null,
+        val showRsvpDialog: Boolean = false
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -46,13 +48,23 @@ class PlanDetailViewModel(
      * Safe to call multiple times — subsequent calls replace previous state.
      * Coroutine is scoped to [viewModelScope] to prevent leaks.
      */
+    fun onRsvpDismissed() {
+        _uiState.update { it.copy(showRsvpDialog = false) }
+    }
+
     fun loadPlan(planId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
             repository.getPlan(planId)
                 .onSuccess { plan ->
-                    _uiState.update { it.copy(isLoading = false, plan = plan) }
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            plan = plan,
+                            showRsvpDialog = plan.status == PlanStatus.PENDING_INVITE
+                        )
+                    }
                 }
                 .onFailure { error ->
                     _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
