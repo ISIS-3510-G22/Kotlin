@@ -29,8 +29,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
+import com.example.plansync.ui.ExploreScreen
 import com.example.plansync.ui.InviteScreen
+import com.example.plansync.ui.MyCrewScreen
+import com.example.plansync.ui.MyPlansScreen
 import com.example.plansync.ui.PlanDetailScreen
+import com.example.plansync.ui.ProfileScreen
 
 /**
  * UI layer — Navigation.
@@ -40,22 +44,23 @@ import com.example.plansync.ui.PlanDetailScreen
  *
  * Route structure:
  *  login            → handled in MainActivity before NavHost
- *  my_plans         → PlanDetailScreen (stub planId for now)
+ *  sign_up          → handled in MainActivity before NavHost
+ *  explore          → ExploreScreen
+ *  my_plans         → MyPlansScreen
  *  plan_detail/{id} → PlanDetailScreen with specific id
  *  invite/{planId}  → InviteScreen
- *  explore          → stub
  *  activities       → stub
- *  groups           → stub
- *  profile          → stub
+ *  groups           → MyCrewScreen
+ *  profile          → ProfileScreen
  */
 
 // ── Route constants ────────────────────────────────────────────────────────────
 
 object Routes {
+    const val EXPLORE     = "explore"
     const val MY_PLANS    = "my_plans"
     const val PLAN_DETAIL = "plan_detail/{planId}"
     const val INVITE      = "invite/{planId}"
-    const val EXPLORE     = "explore"
     const val ACTIVITIES  = "activities"
     const val GROUPS      = "groups"
     const val PROFILE     = "profile"
@@ -75,11 +80,11 @@ enum class BottomNavItem(
     val icon: ImageVector,
     val label: String
 ) {
-    EXPLORE(Routes.EXPLORE,     Icons.Default.Explore,       "Explore"),
-    MY_PLANS(Routes.MY_PLANS,   Icons.Default.CalendarToday, "My Plans"),
-    ACTIVITIES(Routes.ACTIVITIES, Icons.Default.List,        "Activities"),
-    GROUPS(Routes.GROUPS,       Icons.Default.Group,         "Groups"),
-    PROFILE(Routes.PROFILE,     Icons.Default.Person,        "Profile")
+    EXPLORE(Routes.EXPLORE,       Icons.Default.Explore,       "Explore"),
+    MY_PLANS(Routes.MY_PLANS,     Icons.Default.CalendarToday, "My Plans"),
+    ACTIVITIES(Routes.ACTIVITIES, Icons.Default.List,          "Activities"),
+    GROUPS(Routes.GROUPS,         Icons.Default.Group,         "Groups"),
+    PROFILE(Routes.PROFILE,       Icons.Default.Person,        "Profile")
 }
 
 // ── Bottom navigation bar ──────────────────────────────────────────────────────
@@ -135,21 +140,38 @@ fun BottomNavBar(navController: NavController) {
 
 /**
  * UI layer — hosts the main app navigation graph (post-login).
- * Login is handled separately in MainActivity before this NavHost is shown.
+ * Login and sign-up are handled separately in MainActivity before this NavHost.
+ *
+ * [onLoggedOut] is passed in from MainActivity so ProfileScreen can reset
+ * the login state that lives outside the NavHost.
  */
 @Composable
-fun MainNavHost(navController: NavHostController, modifier: Modifier = Modifier) {
+fun MainNavHost(
+    navController: NavHostController,
+    onLoggedOut: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
     NavHost(
         navController = navController,
-        startDestination = Routes.MY_PLANS,
+        startDestination = Routes.EXPLORE,
         modifier = modifier
     ) {
-        // My Plans tab — shows plan detail as the default landing
+        // Explore tab
+        composable(Routes.EXPLORE) {
+            ExploreScreen(
+                onPlanSelected = { planId -> navController.navigate(Routes.planDetail(planId)) },
+                onProfileSelected = { navController.navigate(Routes.PROFILE) },
+                onMyPlansSelected = { navController.navigate(Routes.MY_PLANS) },
+                onMyCrewSelected = { navController.navigate(Routes.GROUPS) }
+            )
+        }
+
+        // My Plans tab
         composable(Routes.MY_PLANS) {
-            PlanDetailScreen(
-                planId = "plan-001",
-                onBack = { navController.popBackStack() },
-                onInvite = { planId -> navController.navigate(Routes.invite(planId)) }
+            MyPlansScreen(
+                onExploreSelected = { navController.navigate(Routes.EXPLORE) },
+                onProfileSelected = { navController.navigate(Routes.PROFILE) },
+                onMyCrewSelected = { navController.navigate(Routes.GROUPS) }
             )
         }
 
@@ -178,11 +200,28 @@ fun MainNavHost(navController: NavHostController, modifier: Modifier = Modifier)
             )
         }
 
-        // Stub destinations — will be replaced with real screens in later milestones
-        composable(Routes.EXPLORE)    { StubScreen("Explore") }
+        // Activities tab — stub (future milestone)
         composable(Routes.ACTIVITIES) { StubScreen("Activities") }
-        composable(Routes.GROUPS)     { StubScreen("Groups") }
-        composable(Routes.PROFILE)    { StubScreen("Profile") }
+
+        // Groups tab — MyCrewScreen
+        composable(Routes.GROUPS) {
+            MyCrewScreen(
+                onExploreSelected = { navController.navigate(Routes.EXPLORE) },
+                onMyPlansSelected = { navController.navigate(Routes.MY_PLANS) },
+                onProfileSelected = { navController.navigate(Routes.PROFILE) }
+            )
+        }
+
+        // Profile tab
+        composable(Routes.PROFILE) {
+            ProfileScreen(
+                onLoggedOut = onLoggedOut,
+                onExploreSelected = { navController.navigate(Routes.EXPLORE) },
+                onPlanSelected = { planId -> navController.navigate(Routes.planDetail(planId)) },
+                onMyPlansSelected = { navController.navigate(Routes.MY_PLANS) },
+                onMyCrewSelected = { navController.navigate(Routes.GROUPS) }
+            )
+        }
     }
 }
 
