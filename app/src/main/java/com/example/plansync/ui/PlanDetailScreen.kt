@@ -60,6 +60,7 @@ import com.example.plansync.model.Plan
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.ui.theme.CoralLight
 import com.example.plansync.viewmodel.PlanDetailViewModel
+import com.example.plansync.ui.RsvpDialog
 
 /**
  * UI layer — Composable screen for Plan Detail.
@@ -115,6 +116,17 @@ fun PlanDetailScreen(
                 PlanDetailContent(plan = uiState.plan!!, onInvite = { onInvite(planId) })
             }
         }
+    }
+
+    // ── RSVP dialog ────────────────────────────────────────────────────────
+    if (uiState.showRsvpDialog && uiState.plan != null) {
+        RsvpDialog(
+            planTitle = uiState.plan!!.title,
+            planMeta  = "${uiState.plan!!.date} · ${uiState.plan!!.participants.size} people invited",
+            onGoing      = { viewModel.onRsvpDismissed() },
+            onCantMake   = { viewModel.onRsvpDismissed() },
+            onMaybeLater = { viewModel.onRsvpDismissed() }
+        )
     }
 }
 
