@@ -68,15 +68,17 @@ import com.example.plansync.viewmodel.PlanDetailViewModel
  * collectAsStateWithLifecycle() (Observer pattern) and calls only ViewModel
  * functions. Never touches PlanRepository directly.
  *
- * @param planId     ID of the plan to load; passed in by the caller (MainActivity).
- * @param viewModel  Injected via viewModel() factory; can be overridden in tests.
- * @param onBack     Callback for the back arrow — wired to navigation in v0.3.
+ * @param planId    ID of the plan to load.
+ * @param viewModel Injected via viewModel() factory; can be overridden in tests.
+ * @param onBack    Callback for the back arrow.
+ * @param onInvite  Callback for the add-participant (+) button — navigates to InviteScreen.
  */
 @Composable
 fun PlanDetailScreen(
     planId: String = "plan-001",
     viewModel: PlanDetailViewModel = viewModel(),
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onInvite: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -110,7 +112,7 @@ fun PlanDetailScreen(
                 }
             }
             uiState.plan != null -> {
-                PlanDetailContent(plan = uiState.plan!!)
+                PlanDetailContent(plan = uiState.plan!!, onInvite = { onInvite(planId) })
             }
         }
     }
@@ -148,7 +150,7 @@ private fun PlanDetailTopBar(onBack: () -> Unit) {
 // ── Scrollable plan content ────────────────────────────────────────────────────
 
 @Composable
-private fun PlanDetailContent(plan: Plan) {
+private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
 
         // Header: title, date, cost, activity count, action buttons
@@ -157,7 +159,7 @@ private fun PlanDetailContent(plan: Plan) {
         item { HorizontalDivider(color = Color(0xFFDDDDDD), thickness = 1.dp) }
 
         // Participants row
-        item { ParticipantsSection(participants = plan.participants) }
+        item { ParticipantsSection(participants = plan.participants, onInvite = onInvite) }
 
         // Activity timeline items
         itemsIndexed(plan.activities) { index, activity ->
@@ -312,7 +314,7 @@ private val avatarColors = listOf(
 )
 
 @Composable
-private fun ParticipantsSection(participants: List<Participant>) {
+private fun ParticipantsSection(participants: List<Participant>, onInvite: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -331,18 +333,19 @@ private fun ParticipantsSection(participants: List<Participant>) {
             participants.forEach { participant ->
                 ParticipantAvatar(participant = participant)
             }
-            // Add participant button
+            // Add participant button — navigates to InviteScreen
             Box(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color.White)
-                    .border(1.5.dp, Color(0xFFCCCCCC), RoundedCornerShape(12.dp)),
+                    .border(1.5.dp, Color(0xFFCCCCCC), RoundedCornerShape(12.dp))
+                    .then(androidx.compose.foundation.clickable { onInvite() }),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Add participant",
+                    contentDescription = "Invite participants",
                     tint = Color(0xFF888888),
                     modifier = Modifier.size(20.dp)
                 )
