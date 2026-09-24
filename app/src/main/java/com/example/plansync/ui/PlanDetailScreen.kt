@@ -17,13 +17,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
@@ -60,7 +61,6 @@ import com.example.plansync.model.Plan
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.ui.theme.CoralLight
 import com.example.plansync.viewmodel.PlanDetailViewModel
-import com.example.plansync.ui.RsvpDialog
 
 /**
  * UI layer — Composable screen for Plan Detail.
@@ -113,7 +113,11 @@ fun PlanDetailScreen(
                 }
             }
             uiState.plan != null -> {
-                PlanDetailContent(plan = uiState.plan!!, onInvite = { onInvite(planId) })
+                PlanDetailContent(
+                    plan = uiState.plan!!,
+                    onInvite = { onInvite(planId) },
+                    onRsvp = { viewModel.onRsvpTriggered() }
+                )
             }
         }
     }
@@ -144,7 +148,7 @@ private fun PlanDetailTopBar(onBack: () -> Unit) {
     ) {
         IconButton(onClick = onBack) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = Color(0xFF222222)
             )
@@ -162,11 +166,11 @@ private fun PlanDetailTopBar(onBack: () -> Unit) {
 // ── Scrollable plan content ────────────────────────────────────────────────────
 
 @Composable
-private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}) {
+private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () -> Unit = {}) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
 
         // Header: title, date, cost, activity count, action buttons
-        item { PlanHeader(plan = plan) }
+        item { PlanHeader(plan = plan, onRsvp = onRsvp) }
 
         item { HorizontalDivider(color = Color(0xFFDDDDDD), thickness = 1.dp) }
 
@@ -188,7 +192,7 @@ private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}) {
 // ── Plan header ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PlanHeader(plan: Plan) {
+private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -227,7 +231,7 @@ private fun PlanHeader(plan: Plan) {
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "Est. \$${plan.estimatedCostPerPerson}/pp",
+                text = "Est. ${'$'}${plan.estimatedCostPerPerson}/pp",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFF444444)
             )
@@ -238,7 +242,7 @@ private fun PlanHeader(plan: Plan) {
         // Activity count row
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                imageVector = Icons.Default.FormatListBulleted,
+                imageVector = Icons.AutoMirrored.Filled.FormatListBulleted,
                 contentDescription = null,
                 tint = Color(0xFF888888),
                 modifier = Modifier.size(16.dp)
@@ -274,7 +278,7 @@ private fun PlanHeader(plan: Plan) {
                 icon = Icons.Default.CheckCircle,
                 label = "RSVP",
                 modifier = Modifier.weight(1f),
-                onClick = { /* TODO: RSVP flow */ }
+                onClick = onRsvp
             )
         }
     }
@@ -352,7 +356,7 @@ private fun ParticipantsSection(participants: List<Participant>, onInvite: () ->
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color.White)
                     .border(1.5.dp, Color(0xFFCCCCCC), RoundedCornerShape(12.dp))
-                    .then(androidx.compose.foundation.clickable { onInvite() }),
+                    .clickable { onInvite() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(

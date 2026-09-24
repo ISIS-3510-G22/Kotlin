@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.plansync.model.Contact
+import com.example.plansync.ui.theme.Coral
 
 // ── Shared dialog shell ────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ fun InvitePersonDialog(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Black,
+                containerColor = Coral,
                 contentColor = Color.White
             )
         ) {
@@ -150,7 +151,7 @@ fun InviteGroupDialog(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Black,
+                containerColor = Coral,
                 contentColor = Color.White
             )
         ) {
@@ -199,7 +200,7 @@ fun RsvpDialog(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Black,
+                containerColor = Coral,
                 contentColor = Color.White
             )
         ) {
@@ -211,8 +212,8 @@ fun RsvpDialog(
             onClick = onCantMake,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.Black),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Black)
+            border = androidx.compose.foundation.BorderStroke(1.dp, Coral),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Coral)
         ) {
             Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
