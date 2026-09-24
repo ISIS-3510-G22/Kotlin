@@ -22,7 +22,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.plansync.ui.LoginScreen
 import com.example.plansync.ui.SignUpScreen
-import com.example.plansync.ui.navigation.BottomNavBar
 import com.example.plansync.ui.navigation.MainNavHost
 import com.example.plansync.ui.navigation.Routes
 import com.example.plansync.ui.theme.Coral
@@ -60,14 +59,15 @@ class MainActivity : ComponentActivity() {
                         onSignUpClick = { isSigningUp = true }
                     )
                     else -> {
-                        // Phase 3 — Main app with Jetpack Navigation + bottom nav
+                        // Phase 3 — Main app with Jetpack Navigation
+                        // Bottom nav is handled inside each screen by teammates' implementation.
+                        // NavHost manages routing between all destinations.
                         val navController = rememberNavController()
                         val currentRoute = navController
                             .currentBackStackEntryAsState().value
                             ?.destination?.route
 
                         Scaffold(
-                            bottomBar = { BottomNavBar(navController = navController) },
                             floatingActionButton = {
                                 if (currentRoute == Routes.MY_PLANS) {
                                     FloatingActionButton(
