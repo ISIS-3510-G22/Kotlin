@@ -29,6 +29,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
+import com.example.plansync.ui.CreatePlanScreen
 import com.example.plansync.ui.ExploreScreen
 import com.example.plansync.ui.InviteScreen
 import com.example.plansync.ui.MyCrewScreen
@@ -61,6 +62,7 @@ object Routes {
     const val MY_PLANS    = "my_plans"
     const val PLAN_DETAIL = "plan_detail/{planId}"
     const val INVITE      = "invite/{planId}"
+    const val CREATE_PLAN = "create_plan"
     const val ACTIVITIES  = "activities"
     const val GROUPS      = "groups"
     const val PROFILE     = "profile"
@@ -197,6 +199,14 @@ fun MainNavHost(
             InviteScreen(
                 planId = planId,
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Create Plan screen
+        composable(Routes.CREATE_PLAN) {
+            CreatePlanScreen(
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
             )
         }
 
