@@ -173,7 +173,9 @@ fun MainNavHost(
             MyPlansScreen(
                 onExploreSelected = { navController.navigate(Routes.EXPLORE) },
                 onProfileSelected = { navController.navigate(Routes.PROFILE) },
-                onMyCrewSelected = { navController.navigate(Routes.GROUPS) }
+                onMyCrewSelected = { navController.navigate(Routes.GROUPS) },
+                onPlanSelected = { planId -> navController.navigate(Routes.planDetail(planId)) },
+                onCreatePlan = { navController.navigate(Routes.CREATE_PLAN) }
             )
         }
 

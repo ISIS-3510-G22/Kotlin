@@ -36,7 +36,9 @@ fun MyPlansScreen(
     viewModel: MyPlansViewModel = viewModel(),
     onExploreSelected: () -> Unit = {},
     onProfileSelected: () -> Unit = {},
-    onMyCrewSelected: () -> Unit = {}
+    onMyCrewSelected: () -> Unit = {},
+    onPlanSelected: (String) -> Unit = {},
+    onCreatePlan: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -59,7 +61,7 @@ fun MyPlansScreen(
                 .background(Color(0xFFF5F5F5))
                 .padding(innerPadding)
         ) {
-            MyPlansTopBar()
+            MyPlansTopBar(onCreatePlan = onCreatePlan)
 
             MyPlansTabRow(
                 selectedTab = uiState.selectedTab,
@@ -92,6 +94,7 @@ fun MyPlansScreen(
                         items(uiState.filteredPlans) { plan ->
                             PlanCard(
                                 plan = plan,
+                                onClick = { onPlanSelected(plan.id) },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
@@ -104,7 +107,7 @@ fun MyPlansScreen(
 
 // Top
 @Composable
-private fun MyPlansTopBar() {
+private fun MyPlansTopBar(onCreatePlan: () -> Unit = {}) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -118,7 +121,7 @@ private fun MyPlansTopBar() {
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
-        IconButton(onClick = { }) {
+        IconButton(onClick = onCreatePlan) {
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = "Create plan",
@@ -209,8 +212,9 @@ private fun EmptyPlansMessage(tab: PlanStatus) {
 // Planes
 
 @Composable
-private fun PlanCard(plan: Plan, modifier: Modifier = Modifier) {
+private fun PlanCard(plan: Plan, onClick: () -> Unit = {}, modifier: Modifier = Modifier) {
     Card(
+        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),

@@ -5,26 +5,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.plansync.ui.LoginScreen
 import com.example.plansync.ui.SignUpScreen
 import com.example.plansync.ui.navigation.MainNavHost
-import com.example.plansync.ui.navigation.Routes
-import com.example.plansync.ui.theme.Coral
 import com.example.plansync.ui.theme.PlanSyncTheme
 
 /**
@@ -59,31 +49,11 @@ class MainActivity : ComponentActivity() {
                         onSignUpClick = { isSigningUp = true }
                     )
                     else -> {
-                        // Phase 3 — Main app with Jetpack Navigation
+                        // Phase 3 — Main app with Jetpack Navigation.
                         // Bottom nav is handled inside each screen by teammates' implementation.
                         // NavHost manages routing between all destinations.
                         val navController = rememberNavController()
-                        val currentRoute = navController
-                            .currentBackStackEntryAsState().value
-                            ?.destination?.route
-
-                        Scaffold(
-                            floatingActionButton = {
-                                if (currentRoute == Routes.MY_PLANS) {
-                                    FloatingActionButton(
-                                        onClick = { navController.navigate(Routes.CREATE_PLAN) },
-                                        containerColor = Coral
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Add,
-                                            contentDescription = "Create Plan",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        ) { innerPadding ->
+                        Scaffold { innerPadding ->
                             MainNavHost(
                                 navController = navController,
                                 onLoggedOut = { isLoggedIn = false },
