@@ -113,7 +113,11 @@ fun PlanDetailScreen(
                 }
             }
             uiState.plan != null -> {
-                PlanDetailContent(plan = uiState.plan!!, onInvite = { onInvite(planId) })
+                PlanDetailContent(
+                    plan = uiState.plan!!,
+                    onInvite = { onInvite(planId) },
+                    onRsvp = { viewModel.onRsvpTriggered() }
+                )
             }
         }
     }
@@ -162,11 +166,11 @@ private fun PlanDetailTopBar(onBack: () -> Unit) {
 // ── Scrollable plan content ────────────────────────────────────────────────────
 
 @Composable
-private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}) {
+private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () -> Unit = {}) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
 
         // Header: title, date, cost, activity count, action buttons
-        item { PlanHeader(plan = plan) }
+        item { PlanHeader(plan = plan, onRsvp = onRsvp) }
 
         item { HorizontalDivider(color = Color(0xFFDDDDDD), thickness = 1.dp) }
 
@@ -188,7 +192,7 @@ private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}) {
 // ── Plan header ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PlanHeader(plan: Plan) {
+private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -274,7 +278,7 @@ private fun PlanHeader(plan: Plan) {
                 icon = Icons.Default.CheckCircle,
                 label = "RSVP",
                 modifier = Modifier.weight(1f),
-                onClick = { /* TODO: RSVP flow */ }
+                onClick = onRsvp
             )
         }
     }
