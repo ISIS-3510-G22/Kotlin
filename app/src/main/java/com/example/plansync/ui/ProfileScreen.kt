@@ -1,6 +1,7 @@
 package com.example.plansync.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,7 +26,8 @@ fun ProfileScreen(
     onExploreSelected: () -> Unit = {},
     onPlanSelected: (String) -> Unit = {},
     onMyPlansSelected: () -> Unit = {},
-    onMyCrewSelected: () -> Unit = {}
+    onMyCrewSelected: () -> Unit = {},
+    onEditProfile: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedNavIndex by remember { mutableIntStateOf(4) }
@@ -76,7 +78,8 @@ fun ProfileScreen(
                     modifier = Modifier
                         .size(140.dp)
                         .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.secondary),
+                        .background(MaterialTheme.colorScheme.secondary)
+                        .clickable(onClick = onEditProfile),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -92,7 +95,8 @@ fun ProfileScreen(
                 Text(
                     text = "${uiState.user?.name.orEmpty()} ${uiState.user?.lastName.orEmpty()}".trim(),
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable(onClick = onEditProfile)
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
