@@ -1,5 +1,6 @@
 package com.example.plansync.viewmodel
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.AuthRepository
@@ -19,9 +20,11 @@ class EditProfileViewModel(
     data class UiState(
         val fullName: String = "",
         val phone: String = "",
+        val photoUrl: String = "",
         val paymentMethods: List<PaymentMethod> = emptyList(),
         val isLoading: Boolean = false,
         val isSaving: Boolean = false,
+        val isUploadingPhoto: Boolean = false,
         val errorMessage: String? = null,
         val didSave: Boolean = false
     )
@@ -41,6 +44,7 @@ class EditProfileViewModel(
                         .filter { part -> part.isNotBlank() }
                         .joinToString(" "),
                     phone = user?.phone.orEmpty(),
+                    photoUrl = user?.photoUrl.orEmpty(),
                     paymentMethods = methods
                 )
             }
@@ -50,6 +54,19 @@ class EditProfileViewModel(
     fun onFullNameChange(value: String) = _uiState.update { it.copy(fullName = value) }
 
     fun onPhoneChange(value: String) = _uiState.update { it.copy(phone = value) }
+
+    fun onPhotoPicked(uri: Uri) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploadingPhoto = true, errorMessage = null) }
+            profileRepository.uploadProfilePhoto(uri)
+                .onSuccess { photoUrl ->
+                    _uiState.update { it.copy(isUploadingPhoto = false, photoUrl = photoUrl) }
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(isUploadingPhoto = false, errorMessage = error.message) }
+                }
+        }
+    }
 
     fun saveChanges() {
         val current = _uiState.value

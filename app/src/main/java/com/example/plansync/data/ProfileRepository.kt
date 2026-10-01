@@ -1,11 +1,13 @@
 package com.example.plansync.data
 
+import android.net.Uri
 import com.example.plansync.model.PaymentMethod
 import com.example.plansync.model.PaymentMethodType
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
+import com.google.firebase.storage.storage
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -21,6 +23,29 @@ class ProfileRepository {
             Firebase.firestore.collection("users").document(uid)
                 .update(mapOf("name" to name, "lastName" to lastName, "phone" to phone))
                 .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
+                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }
+    }
+
+    suspend fun uploadProfilePhoto(uri: Uri): Result<String> {
+        val uid = auth.currentUser?.uid
+            ?: return Result.failure(Exception("No active session."))
+
+        val photoRef = Firebase.storage.reference.child("profile_photos/$uid.jpg")
+
+        return suspendCancellableCoroutine { continuation ->
+            photoRef.putFile(uri)
+                .addOnSuccessListener {
+                    photoRef.downloadUrl
+                        .addOnSuccessListener { downloadUri ->
+                            val photoUrl = downloadUri.toString()
+                            Firebase.firestore.collection("users").document(uid)
+                                .update("photoUrl", photoUrl)
+                                .addOnSuccessListener { continuation.resume(Result.success(photoUrl)) }
+                                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+                        }
+                        .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+                }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
     }
