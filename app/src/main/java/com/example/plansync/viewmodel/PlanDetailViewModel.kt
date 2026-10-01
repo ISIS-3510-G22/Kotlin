@@ -52,6 +52,10 @@ class PlanDetailViewModel(
         _uiState.update { it.copy(showRsvpDialog = false) }
     }
 
+    fun onRsvpTriggered() {
+        _uiState.update { it.copy(showRsvpDialog = true) }
+    }
+
     fun loadPlan(planId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }

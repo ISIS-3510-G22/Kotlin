@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.example.plansync.ui.CreatePlanScreen
+import com.example.plansync.ui.EditProfileScreen
 import com.example.plansync.ui.ExploreScreen
 import com.example.plansync.ui.InviteScreen
 import com.example.plansync.ui.MyCrewScreen
@@ -37,25 +38,7 @@ import com.example.plansync.ui.MyPlansScreen
 import com.example.plansync.ui.PlanDetailScreen
 import com.example.plansync.ui.ProfileScreen
 
-/**
- * UI layer — Navigation.
- *
- * Defines all app routes and hosts the NavHost. Replaces the manual
- * Screen enum used in milestones v0.1–v0.2.
- *
- * Route structure:
- *  login            → handled in MainActivity before NavHost
- *  sign_up          → handled in MainActivity before NavHost
- *  explore          → ExploreScreen
- *  my_plans         → MyPlansScreen
- *  plan_detail/{id} → PlanDetailScreen with specific id
- *  invite/{planId}  → InviteScreen
- *  activities       → stub
- *  groups           → MyCrewScreen
- *  profile          → ProfileScreen
- */
 
-// ── Route constants ────────────────────────────────────────────────────────────
 
 object Routes {
     const val EXPLORE     = "explore"
@@ -66,17 +49,14 @@ object Routes {
     const val ACTIVITIES  = "activities"
     const val GROUPS      = "groups"
     const val PROFILE     = "profile"
+    const val EDIT_PROFILE = "edit_profile"
 
     fun planDetail(planId: String) = "plan_detail/$planId"
     fun invite(planId: String)     = "invite/$planId"
 }
 
-// ── Bottom nav items ───────────────────────────────────────────────────────────
 
-/**
- * UI layer — defines each tab in the bottom navigation bar.
- * [route] maps to the NavHost destination for that tab.
- */
+
 enum class BottomNavItem(
     val route: String,
     val icon: ImageVector,
@@ -89,12 +69,7 @@ enum class BottomNavItem(
     PROFILE(Routes.PROFILE,       Icons.Default.Person,        "Profile")
 }
 
-// ── Bottom navigation bar ──────────────────────────────────────────────────────
 
-/**
- * UI layer — shared bottom navigation bar rendered inside the main Scaffold.
- * Highlights the item whose route matches the current back-stack destination.
- */
 @Composable
 fun BottomNavBar(navController: NavController) {
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -138,15 +113,7 @@ fun BottomNavBar(navController: NavController) {
     }
 }
 
-// ── Nav host ───────────────────────────────────────────────────────────────────
 
-/**
- * UI layer — hosts the main app navigation graph (post-login).
- * Login and sign-up are handled separately in MainActivity before this NavHost.
- *
- * [onLoggedOut] is passed in from MainActivity so ProfileScreen can reset
- * the login state that lives outside the NavHost.
- */
 @Composable
 fun MainNavHost(
     navController: NavHostController,
@@ -158,7 +125,7 @@ fun MainNavHost(
         startDestination = Routes.EXPLORE,
         modifier = modifier
     ) {
-        // Explore tab
+
         composable(Routes.EXPLORE) {
             ExploreScreen(
                 onPlanSelected = { planId -> navController.navigate(Routes.planDetail(planId)) },
@@ -168,7 +135,6 @@ fun MainNavHost(
             )
         }
 
-        // My Plans tab
         composable(Routes.MY_PLANS) {
             MyPlansScreen(
                 onExploreSelected = { navController.navigate(Routes.EXPLORE) },
@@ -179,7 +145,6 @@ fun MainNavHost(
             )
         }
 
-        // Plan detail with dynamic planId
         composable(
             route = Routes.PLAN_DETAIL,
             arguments = listOf(navArgument("planId") { type = NavType.StringType })
@@ -192,7 +157,6 @@ fun MainNavHost(
             )
         }
 
-        // Invite screen
         composable(
             route = Routes.INVITE,
             arguments = listOf(navArgument("planId") { type = NavType.StringType })
@@ -204,7 +168,6 @@ fun MainNavHost(
             )
         }
 
-        // Create Plan screen
         composable(Routes.CREATE_PLAN) {
             CreatePlanScreen(
                 onBack = { navController.popBackStack() },
@@ -212,10 +175,8 @@ fun MainNavHost(
             )
         }
 
-        // Activities tab — stub (future milestone)
         composable(Routes.ACTIVITIES) { StubScreen("Activities") }
 
-        // Groups tab — MyCrewScreen
         composable(Routes.GROUPS) {
             MyCrewScreen(
                 onExploreSelected = { navController.navigate(Routes.EXPLORE) },
@@ -224,20 +185,26 @@ fun MainNavHost(
             )
         }
 
-        // Profile tab
         composable(Routes.PROFILE) {
             ProfileScreen(
                 onLoggedOut = onLoggedOut,
                 onExploreSelected = { navController.navigate(Routes.EXPLORE) },
                 onPlanSelected = { planId -> navController.navigate(Routes.planDetail(planId)) },
                 onMyPlansSelected = { navController.navigate(Routes.MY_PLANS) },
-                onMyCrewSelected = { navController.navigate(Routes.GROUPS) }
+                onMyCrewSelected = { navController.navigate(Routes.GROUPS) },
+                onEditProfile = { navController.navigate(Routes.EDIT_PROFILE) }
+            )
+        }
+
+        composable(Routes.EDIT_PROFILE) {
+            EditProfileScreen(
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
             )
         }
     }
 }
 
-// Temporary placeholder for unimplemented tabs
 @Composable
 private fun StubScreen(name: String) {
     Box(
