@@ -34,7 +34,8 @@ import com.example.plansync.viewmodel.EditProfileViewModel
 fun EditProfileScreen(
     viewModel: EditProfileViewModel = viewModel(),
     onBack: () -> Unit = {},
-    onSaved: () -> Unit = {}
+    onSaved: () -> Unit = {},
+    onAddMethod: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -168,7 +169,7 @@ fun EditProfileScreen(
                 onValueChange = viewModel::onPhoneChange
             )
 
-            SectionLabel("PAYMENT METHODS", topPadding = 24.dp)
+            SectionLabel("REIMBURSEMENT METHODS", topPadding = 24.dp)
             Text(
                 text = "Manage where you receive funds for shared plan expenses.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -184,7 +185,7 @@ fun EditProfileScreen(
             }
 
             Surface(
-                onClick = { },
+                onClick = onAddMethod,
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),

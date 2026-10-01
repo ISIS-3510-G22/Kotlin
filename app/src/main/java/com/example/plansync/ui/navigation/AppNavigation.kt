@@ -29,6 +29,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
+import com.example.plansync.ui.AddPaymentMethodScreen
 import com.example.plansync.ui.CreatePlanScreen
 import com.example.plansync.ui.EditProfileScreen
 import com.example.plansync.ui.ExploreScreen
@@ -50,6 +51,7 @@ object Routes {
     const val GROUPS      = "groups"
     const val PROFILE     = "profile"
     const val EDIT_PROFILE = "edit_profile"
+    const val ADD_PAYMENT_METHOD = "add_payment_method"
 
     fun planDetail(planId: String) = "plan_detail/$planId"
     fun invite(planId: String)     = "invite/$planId"
@@ -198,6 +200,14 @@ fun MainNavHost(
 
         composable(Routes.EDIT_PROFILE) {
             EditProfileScreen(
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() },
+                onAddMethod = { navController.navigate(Routes.ADD_PAYMENT_METHOD) }
+            )
+        }
+
+        composable(Routes.ADD_PAYMENT_METHOD) {
+            AddPaymentMethodScreen(
                 onBack = { navController.popBackStack() },
                 onSaved = { navController.popBackStack() }
             )
