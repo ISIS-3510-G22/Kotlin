@@ -114,7 +114,8 @@ class AuthRepository {
                             email = document.getString("email") ?: fallback.email,
                             lastName = document.getString("lastName") ?: "",
                             username = document.getString("username") ?: "",
-                            phone = document.getString("phone") ?: ""
+                            phone = document.getString("phone") ?: "",
+                            photoUrl = document.getString("photoUrl") ?: ""
                         )
                     )
                 }

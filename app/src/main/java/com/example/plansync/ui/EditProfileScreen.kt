@@ -1,7 +1,13 @@
 package com.example.plansync.ui
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -12,23 +18,30 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.plansync.model.PaymentMethod
 import com.example.plansync.model.PaymentMethodType
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.ui.theme.CoralLight
 import com.example.plansync.viewmodel.EditProfileViewModel
+import java.io.File
 
 @Composable
 fun EditProfileScreen(
@@ -38,6 +51,21 @@ fun EditProfileScreen(
     onAddMethod: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    var showPhotoSourceDialog by remember { mutableStateOf(false) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success) {
+            pendingCameraUri?.let { viewModel.onPhotoPicked(it) }
+        }
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let { viewModel.onPhotoPicked(it) }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.load()
@@ -48,6 +76,45 @@ fun EditProfileScreen(
             onSaved()
             viewModel.onSaveHandled()
         }
+    }
+
+    if (showPhotoSourceDialog) {
+        AlertDialog(
+            onDismissRequest = { showPhotoSourceDialog = false },
+            title = { Text("Update Profile Photo") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = {
+                            showPhotoSourceDialog = false
+                            val uri = createCameraPhotoUri(context)
+                            pendingCameraUri = uri
+                            cameraLauncher.launch(uri)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Take Photo", modifier = Modifier.fillMaxWidth())
+                    }
+                    TextButton(
+                        onClick = {
+                            showPhotoSourceDialog = false
+                            galleryLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Choose from Library", modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showPhotoSourceDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -131,15 +198,52 @@ fun EditProfileScreen(
                     modifier = Modifier
                         .size(96.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.secondary),
+                        .background(MaterialTheme.colorScheme.secondary)
+                        .clickable { showPhotoSourceDialog = true },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(40.dp)
-                    )
+                    if (uiState.photoUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = uiState.photoUrl,
+                            contentDescription = "Profile photo",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+                    if (uiState.isUploadingPhoto) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.35f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = Color.White)
+                        }
+                    }
+                    Surface(
+                        onClick = { showPhotoSourceDialog = true },
+                        shape = CircleShape,
+                        color = Coral,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(28.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Filled.PhotoCamera,
+                                contentDescription = "Change photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -323,4 +427,10 @@ private fun PaymentMethodCard(method: PaymentMethod, modifier: Modifier = Modifi
             }
         }
     }
+}
+
+private fun createCameraPhotoUri(context: Context): Uri {
+    val photosDir = File(context.cacheDir, "camera_photos").apply { mkdirs() }
+    val photoFile = File(photosDir, "profile_${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
 }
