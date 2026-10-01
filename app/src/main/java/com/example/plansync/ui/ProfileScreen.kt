@@ -26,6 +26,7 @@ fun ProfileScreen(
     onExploreSelected: () -> Unit = {},
     onPlanSelected: (String) -> Unit = {},
     onMyPlansSelected: () -> Unit = {},
+    onMyActivitiesSelected: () -> Unit = {},
     onMyCrewSelected: () -> Unit = {},
     onEditProfile: () -> Unit = {}
 ) {
@@ -48,6 +49,7 @@ fun ProfileScreen(
                     when (index) {
                         0 -> onExploreSelected()
                         1 -> onMyPlansSelected()
+                        2 -> onMyActivitiesSelected()
                         3 -> onMyCrewSelected()
                         else -> selectedNavIndex = index
                     }

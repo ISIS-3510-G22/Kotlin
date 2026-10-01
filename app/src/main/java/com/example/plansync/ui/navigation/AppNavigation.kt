@@ -1,7 +1,5 @@
 package com.example.plansync.ui.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Explore
@@ -15,7 +13,6 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -30,10 +27,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.example.plansync.ui.AddPaymentMethodScreen
+import com.example.plansync.ui.CreateActivityScreen
 import com.example.plansync.ui.CreatePlanScreen
 import com.example.plansync.ui.EditProfileScreen
 import com.example.plansync.ui.ExploreScreen
 import com.example.plansync.ui.InviteScreen
+import com.example.plansync.ui.MyActivitiesScreen
 import com.example.plansync.ui.MyCrewScreen
 import com.example.plansync.ui.MyPlansScreen
 import com.example.plansync.ui.PlanDetailScreen
@@ -52,6 +51,7 @@ object Routes {
     const val PROFILE     = "profile"
     const val EDIT_PROFILE = "edit_profile"
     const val ADD_PAYMENT_METHOD = "add_payment_method"
+    const val CREATE_ACTIVITY = "create_activity"
 
     fun planDetail(planId: String) = "plan_detail/$planId"
     fun invite(planId: String)     = "invite/$planId"
@@ -133,6 +133,7 @@ fun MainNavHost(
                 onPlanSelected = { planId -> navController.navigate(Routes.planDetail(planId)) },
                 onProfileSelected = { navController.navigate(Routes.PROFILE) },
                 onMyPlansSelected = { navController.navigate(Routes.MY_PLANS) },
+                onMyActivitiesSelected = { navController.navigate(Routes.ACTIVITIES) },
                 onMyCrewSelected = { navController.navigate(Routes.GROUPS) }
             )
         }
@@ -141,6 +142,7 @@ fun MainNavHost(
             MyPlansScreen(
                 onExploreSelected = { navController.navigate(Routes.EXPLORE) },
                 onProfileSelected = { navController.navigate(Routes.PROFILE) },
+                onMyActivitiesSelected = { navController.navigate(Routes.ACTIVITIES) },
                 onMyCrewSelected = { navController.navigate(Routes.GROUPS) },
                 onPlanSelected = { planId -> navController.navigate(Routes.planDetail(planId)) },
                 onCreatePlan = { navController.navigate(Routes.CREATE_PLAN) }
@@ -177,12 +179,28 @@ fun MainNavHost(
             )
         }
 
-        composable(Routes.ACTIVITIES) { StubScreen("Activities") }
+        composable(Routes.ACTIVITIES) {
+            MyActivitiesScreen(
+                onExploreSelected = { navController.navigate(Routes.EXPLORE) },
+                onMyPlansSelected = { navController.navigate(Routes.MY_PLANS) },
+                onMyCrewSelected = { navController.navigate(Routes.GROUPS) },
+                onProfileSelected = { navController.navigate(Routes.PROFILE) },
+                onCreateActivity = { navController.navigate(Routes.CREATE_ACTIVITY) }
+            )
+        }
+
+        composable(Routes.CREATE_ACTIVITY) {
+            CreateActivityScreen(
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
+            )
+        }
 
         composable(Routes.GROUPS) {
             MyCrewScreen(
                 onExploreSelected = { navController.navigate(Routes.EXPLORE) },
                 onMyPlansSelected = { navController.navigate(Routes.MY_PLANS) },
+                onMyActivitiesSelected = { navController.navigate(Routes.ACTIVITIES) },
                 onProfileSelected = { navController.navigate(Routes.PROFILE) }
             )
         }
@@ -193,6 +211,7 @@ fun MainNavHost(
                 onExploreSelected = { navController.navigate(Routes.EXPLORE) },
                 onPlanSelected = { planId -> navController.navigate(Routes.planDetail(planId)) },
                 onMyPlansSelected = { navController.navigate(Routes.MY_PLANS) },
+                onMyActivitiesSelected = { navController.navigate(Routes.ACTIVITIES) },
                 onMyCrewSelected = { navController.navigate(Routes.GROUPS) },
                 onEditProfile = { navController.navigate(Routes.EDIT_PROFILE) }
             )
@@ -212,15 +231,5 @@ fun MainNavHost(
                 onSaved = { navController.popBackStack() }
             )
         }
-    }
-}
-
-@Composable
-private fun StubScreen(name: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text = "$name — coming soon", color = Color(0xFF888888))
     }
 }

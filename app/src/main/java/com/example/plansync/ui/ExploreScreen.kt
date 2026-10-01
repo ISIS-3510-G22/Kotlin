@@ -33,7 +33,7 @@ import com.example.plansync.viewmodel.ExploreViewModel
 @Composable
 fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (String) -> Unit = {},
                 onProfileSelected: () -> Unit = {}, onMyPlansSelected: () -> Unit = {},
-                onMyCrewSelected: () -> Unit = {}) {
+                onMyActivitiesSelected: () -> Unit = {}, onMyCrewSelected: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedNavIndex by remember { mutableIntStateOf(0) }
 
@@ -48,6 +48,7 @@ fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (St
                 onSelect = { index ->
                     when (index) {
                         1 -> onMyPlansSelected()
+                        2 -> onMyActivitiesSelected()
                         3 -> onMyCrewSelected()
                         4 -> onProfileSelected()
                         else -> selectedNavIndex = index
