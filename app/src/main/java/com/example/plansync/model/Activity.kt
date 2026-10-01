@@ -10,8 +10,12 @@ data class Activity(
     val category: String,
     val description: String,
     val address: String,
-    val iconType: ActivityIcon
+    val iconType: ActivityIcon,
+    val price: Int = 0,
+    val visibility: ActivityVisibility = ActivityVisibility.PRIVATE
 )
+
+enum class ActivityVisibility { PRIVATE, PUBLIC }
 
 /**
  * Model layer — categorises the icon shown on the timeline beside each activity.

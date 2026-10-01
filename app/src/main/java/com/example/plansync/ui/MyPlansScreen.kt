@@ -36,6 +36,7 @@ fun MyPlansScreen(
     viewModel: MyPlansViewModel = viewModel(),
     onExploreSelected: () -> Unit = {},
     onProfileSelected: () -> Unit = {},
+    onMyActivitiesSelected: () -> Unit = {},
     onMyCrewSelected: () -> Unit = {},
     onPlanSelected: (String) -> Unit = {},
     onCreatePlan: () -> Unit = {}
@@ -51,6 +52,7 @@ fun MyPlansScreen(
             MyPlansBottomBar(
                 onExploreSelected = onExploreSelected,
                 onProfileSelected = onProfileSelected,
+                onMyActivitiesSelected = onMyActivitiesSelected,
                 onMyCrewSelected = onMyCrewSelected
             )
         }
@@ -411,6 +413,7 @@ private val myPlansNavItems = listOf(
 private fun MyPlansBottomBar(
     onExploreSelected: () -> Unit,
     onProfileSelected: () -> Unit,
+    onMyActivitiesSelected: () -> Unit,
     onMyCrewSelected: () -> Unit
 ) {
     var selectedIndex by remember { mutableIntStateOf(1) }
@@ -422,6 +425,7 @@ private fun MyPlansBottomBar(
                 onClick = {
                     when (index) {
                         0 -> onExploreSelected()
+                        2 -> onMyActivitiesSelected()
                         3 -> onMyCrewSelected()
                         4 -> onProfileSelected()
                         else -> selectedIndex = index

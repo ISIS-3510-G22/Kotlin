@@ -33,6 +33,7 @@ fun MyCrewScreen(
     viewModel: MyCrewViewModel = viewModel(),
     onExploreSelected: () -> Unit = {},
     onMyPlansSelected: () -> Unit = {},
+    onMyActivitiesSelected: () -> Unit = {},
     onProfileSelected: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -46,6 +47,7 @@ fun MyCrewScreen(
             MyCrewBottomBar(
                 onExploreSelected = onExploreSelected,
                 onMyPlansSelected = onMyPlansSelected,
+                onMyActivitiesSelected = onMyActivitiesSelected,
                 onProfileSelected = onProfileSelected
             )
         }
@@ -391,6 +393,7 @@ private val myCrewNavItems = listOf(
 private fun MyCrewBottomBar(
     onExploreSelected: () -> Unit,
     onMyPlansSelected: () -> Unit,
+    onMyActivitiesSelected: () -> Unit,
     onProfileSelected: () -> Unit
 ) {
     NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
@@ -401,6 +404,7 @@ private fun MyCrewBottomBar(
                     when (index) {
                         0 -> onExploreSelected()
                         1 -> onMyPlansSelected()
+                        2 -> onMyActivitiesSelected()
                         4 -> onProfileSelected()
                         else -> {}
                     }
