@@ -26,7 +26,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
+import com.example.plansync.ui.ActivityDetailScreen
 import com.example.plansync.ui.AddPaymentMethodScreen
+import com.example.plansync.ui.AddToPlanScreen
 import com.example.plansync.ui.CreateActivityScreen
 import com.example.plansync.ui.CreatePlanScreen
 import com.example.plansync.ui.EditProfileScreen
@@ -54,9 +56,15 @@ object Routes {
     const val EDIT_PROFILE = "edit_profile"
     const val ADD_PAYMENT_METHOD = "add_payment_method"
     const val CREATE_ACTIVITY = "create_activity"
+    const val ACTIVITY_DETAIL = "activity_detail/{activityId}"
+    const val EDIT_ACTIVITY = "edit_activity/{activityId}"
+    const val ADD_TO_PLAN = "add_to_plan/{activityId}"
 
     fun planDetail(planId: String) = "plan_detail/$planId"
     fun invite(planId: String)     = "invite/$planId"
+    fun activityDetail(activityId: String) = "activity_detail/$activityId"
+    fun editActivity(activityId: String) = "edit_activity/$activityId"
+    fun addToPlan(activityId: String) = "add_to_plan/$activityId"
 }
 
 
@@ -196,7 +204,43 @@ fun MainNavHost(
                 onMyPlansSelected = { navController.navigate(Routes.MY_PLANS) },
                 onMyCrewSelected = { navController.navigate(Routes.GROUPS) },
                 onProfileSelected = { navController.navigate(Routes.PROFILE) },
-                onCreateActivity = { navController.navigate(Routes.CREATE_ACTIVITY) }
+                onCreateActivity = { navController.navigate(Routes.CREATE_ACTIVITY) },
+                onActivitySelected = { id -> navController.navigate(Routes.activityDetail(id)) }
+            )
+        }
+
+        composable(
+            route = Routes.ACTIVITY_DETAIL,
+            arguments = listOf(navArgument("activityId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            ActivityDetailScreen(
+                activityId = backStackEntry.arguments?.getString("activityId").orEmpty(),
+                onBack = { navController.popBackStack() },
+                onEdit = { id -> navController.navigate(Routes.editActivity(id)) },
+                onAddToPlan = { id -> navController.navigate(Routes.addToPlan(id)) }
+            )
+        }
+
+        composable(
+            route = Routes.ADD_TO_PLAN,
+            arguments = listOf(navArgument("activityId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            AddToPlanScreen(
+                activityId = backStackEntry.arguments?.getString("activityId").orEmpty(),
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() },
+                onCreatePlan = { navController.navigate(Routes.CREATE_PLAN) }
+            )
+        }
+
+        composable(
+            route = Routes.EDIT_ACTIVITY,
+            arguments = listOf(navArgument("activityId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            CreateActivityScreen(
+                activityId = backStackEntry.arguments?.getString("activityId"),
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
             )
         }
 

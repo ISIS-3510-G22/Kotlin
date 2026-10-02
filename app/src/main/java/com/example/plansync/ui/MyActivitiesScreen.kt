@@ -26,8 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.plansync.model.Activity
-import com.example.plansync.model.ActivityVisibility
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import com.example.plansync.ui.theme.Coral
+import com.example.plansync.viewmodel.ActivityTab
 import com.example.plansync.viewmodel.MyActivitiesViewModel
 
 @Composable
@@ -37,7 +39,8 @@ fun MyActivitiesScreen(
     onMyPlansSelected: () -> Unit = {},
     onMyCrewSelected: () -> Unit = {},
     onProfileSelected: () -> Unit = {},
-    onCreateActivity: () -> Unit = {}
+    onCreateActivity: () -> Unit = {},
+    onActivitySelected: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -53,6 +56,16 @@ fun MyActivitiesScreen(
                 onMyCrewSelected = onMyCrewSelected,
                 onProfileSelected = onProfileSelected
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onCreateActivity,
+                containerColor = Coral,
+                contentColor = Color.White,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Create activity")
+            }
         }
     ) { innerPadding ->
         Column(
@@ -61,7 +74,7 @@ fun MyActivitiesScreen(
                 .background(Color(0xFFF5F5F5))
                 .padding(innerPadding)
         ) {
-            MyActivitiesTopBar(onCreateActivity = onCreateActivity)
+            MyActivitiesTopBar()
 
             MyActivitiesTabRow(
                 selectedTab = uiState.selectedTab,
@@ -94,6 +107,7 @@ fun MyActivitiesScreen(
                         items(uiState.filteredActivities) { activity ->
                             ActivityCard(
                                 activity = activity,
+                                onClick = { onActivitySelected(activity.id) },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
@@ -107,13 +121,12 @@ fun MyActivitiesScreen(
 // Top
 
 @Composable
-private fun MyActivitiesTopBar(onCreateActivity: () -> Unit) {
+private fun MyActivitiesTopBar() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.White)
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -121,20 +134,13 @@ private fun MyActivitiesTopBar(onCreateActivity: () -> Unit) {
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
-        IconButton(onClick = onCreateActivity) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Create activity",
-                tint = Color(0xFF222222)
-            )
-        }
     }
 }
 
 // Tabs
 
 @Composable
-private fun MyActivitiesTabRow(selectedTab: ActivityVisibility, onTabSelected: (ActivityVisibility) -> Unit) {
+private fun MyActivitiesTabRow(selectedTab: ActivityTab, onTabSelected: (ActivityTab) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -142,18 +148,18 @@ private fun MyActivitiesTabRow(selectedTab: ActivityVisibility, onTabSelected: (
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ActivityTabPill(
-            label = "Saved",
-            isSelected = selectedTab == ActivityVisibility.PUBLIC,
-            onClick = { onTabSelected(ActivityVisibility.PUBLIC) },
-            modifier = Modifier.weight(1f)
-        )
-        ActivityTabPill(
-            label = "Private",
-            isSelected = selectedTab == ActivityVisibility.PRIVATE,
-            onClick = { onTabSelected(ActivityVisibility.PRIVATE) },
-            modifier = Modifier.weight(1f)
-        )
+        listOf(
+            ActivityTab.FOR_YOU to "For You",
+            ActivityTab.LIKED to "Liked",
+            ActivityTab.PRIVATE to "Private"
+        ).forEach { (tab, label) ->
+            ActivityTabPill(
+                label = label,
+                isSelected = selectedTab == tab,
+                onClick = { onTabSelected(tab) },
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
@@ -188,13 +194,14 @@ private fun ActivityTabPill(
 
 // Empty state
 
-private fun emptyStateMessage(tab: ActivityVisibility): String = when (tab) {
-    ActivityVisibility.PUBLIC -> "No saved activities yet."
-    ActivityVisibility.PRIVATE -> "No private activities yet."
+private fun emptyStateMessage(tab: ActivityTab): String = when (tab) {
+    ActivityTab.FOR_YOU -> "No public activities yet."
+    ActivityTab.LIKED -> "No liked activities yet."
+    ActivityTab.PRIVATE -> "No private activities yet."
 }
 
 @Composable
-private fun EmptyActivitiesMessage(tab: ActivityVisibility) {
+private fun EmptyActivitiesMessage(tab: ActivityTab) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = emptyStateMessage(tab),
@@ -207,8 +214,9 @@ private fun EmptyActivitiesMessage(tab: ActivityVisibility) {
 // Activity card
 
 @Composable
-private fun ActivityCard(activity: Activity, modifier: Modifier = Modifier) {
+fun ActivityCard(activity: Activity, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
+        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -229,12 +237,21 @@ private fun ActivityCard(activity: Activity, modifier: Modifier = Modifier) {
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Image,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.size(28.dp)
-                )
+                if (activity.photoUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = activity.photoUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.Image,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -247,7 +264,7 @@ private fun ActivityCard(activity: Activity, modifier: Modifier = Modifier) {
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = activity.category,
+                        text = activity.tags.joinToString(", "),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = Coral

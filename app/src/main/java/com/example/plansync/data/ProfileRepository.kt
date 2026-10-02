@@ -8,6 +8,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.storage
+import java.util.UUID
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -31,46 +32,13 @@ class ProfileRepository {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
-        val photoRef = Firebase.storage.reference.child("profile_photos/$uid.jpg")
+        val photoUrl = StorageRepository().uploadImage("profile_photos/$uid.jpg", uri)
+            .getOrElse { return Result.failure(it) }
 
         return suspendCancellableCoroutine { continuation ->
-            photoRef.putFile(uri)
-                .addOnSuccessListener {
-                    photoRef.downloadUrl
-                        .addOnSuccessListener { downloadUri ->
-                            val photoUrl = downloadUri.toString()
-                            Firebase.firestore.collection("users").document(uid)
-                                .update("photoUrl", photoUrl)
-                                .addOnSuccessListener { continuation.resume(Result.success(photoUrl)) }
-                                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-                        }
-                        .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-                }
-                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-        }
-    }
-
-    suspend fun getPaymentMethods(): Result<List<PaymentMethod>> {
-        val uid = auth.currentUser?.uid
-            ?: return Result.failure(Exception("No active session."))
-
-        return suspendCancellableCoroutine { continuation ->
-            Firebase.firestore.collection("users").document(uid).collection("paymentMethods")
-                .orderBy("createdAt")
-                .get()
-                .addOnSuccessListener { snapshot ->
-                    val methods = snapshot.documents.map { doc ->
-                        PaymentMethod(
-                            id = doc.id,
-                            label = doc.getString("accountType").orEmpty(),
-                            detail = doc.getString("account").orEmpty(),
-                            type = runCatching { PaymentMethodType.valueOf(doc.getString("type").orEmpty()) }
-                                .getOrDefault(PaymentMethodType.BANK),
-                            isPrimary = doc.getBoolean("isPrimary") ?: false
-                        )
-                    }
-                    continuation.resume(Result.success(methods))
-                }
+            Firebase.firestore.collection("users").document(uid)
+                .update("photoUrl", photoUrl)
+                .addOnSuccessListener { continuation.resume(Result.success(photoUrl)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
     }
@@ -79,41 +47,32 @@ class ProfileRepository {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
-        val methods = Firebase.firestore.collection("users").document(uid).collection("paymentMethods")
+        val method = PaymentMethod(
+            id = UUID.randomUUID().toString(),
+            label = accountType,
+            detail = account,
+            type = if (accountType.contains("venmo", ignoreCase = true)) PaymentMethodType.VENMO else PaymentMethodType.BANK
+        )
+        val data = mapOf("id" to method.id, "type" to method.label, "account" to method.detail)
 
         return suspendCancellableCoroutine { continuation ->
-            methods.get()
-                .addOnSuccessListener { existing ->
-                    val isPrimary = existing.isEmpty
-                    val type = if (accountType.contains("venmo", ignoreCase = true)) {
-                        PaymentMethodType.VENMO
-                    } else {
-                        PaymentMethodType.BANK
-                    }
-                    val doc = methods.document()
-                    val data = mapOf(
-                        "accountType" to accountType,
-                        "account" to account,
-                        "type" to type.name,
-                        "isPrimary" to isPrimary,
-                        "createdAt" to FieldValue.serverTimestamp()
-                    )
-                    doc.set(data)
-                        .addOnSuccessListener {
-                            continuation.resume(
-                                Result.success(
-                                    PaymentMethod(
-                                        id = doc.id,
-                                        label = accountType,
-                                        detail = account,
-                                        type = type,
-                                        isPrimary = isPrimary
-                                    )
-                                )
-                            )
-                        }
-                        .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-                }
+            Firebase.firestore.collection("users").document(uid)
+                .update("reimbursementMethods", FieldValue.arrayUnion(data))
+                .addOnSuccessListener { continuation.resume(Result.success(method)) }
+                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }
+    }
+
+    suspend fun deletePaymentMethod(method: PaymentMethod): Result<Unit> {
+        val uid = auth.currentUser?.uid
+            ?: return Result.failure(Exception("No active session."))
+
+        val data = mapOf("id" to method.id, "type" to method.label, "account" to method.detail)
+
+        return suspendCancellableCoroutine { continuation ->
+            Firebase.firestore.collection("users").document(uid)
+                .update("reimbursementMethods", FieldValue.arrayRemove(data))
+                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
     }

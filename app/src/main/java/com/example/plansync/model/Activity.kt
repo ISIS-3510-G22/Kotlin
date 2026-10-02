@@ -12,7 +12,11 @@ data class Activity(
     val address: String,
     val iconType: ActivityIcon,
     val price: Int = 0,
-    val visibility: ActivityVisibility = ActivityVisibility.PRIVATE
+    val visibility: ActivityVisibility = ActivityVisibility.PRIVATE,
+    val ownerId: String = "",
+    val likedBy: List<String> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val photoUrl: String = ""
 )
 
 enum class ActivityVisibility { PRIVATE, PUBLIC }

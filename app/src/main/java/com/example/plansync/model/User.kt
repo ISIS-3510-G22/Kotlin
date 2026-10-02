@@ -11,5 +11,6 @@ data class User(
     val lastName: String = "",
     val username: String = "",
     val phone: String = "",
-    val photoUrl: String = ""
+    val photoUrl: String = "",
+    val reimbursementMethods: List<PaymentMethod> = emptyList()
 )

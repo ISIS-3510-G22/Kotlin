@@ -36,7 +36,6 @@ class EditProfileViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val user = authRepository.getCurrentUser()
-            val methods = profileRepository.getPaymentMethods().getOrDefault(emptyList())
             _uiState.update {
                 it.copy(
                     isLoading = false,
@@ -45,7 +44,7 @@ class EditProfileViewModel(
                         .joinToString(" "),
                     phone = user?.phone.orEmpty(),
                     photoUrl = user?.photoUrl.orEmpty(),
-                    paymentMethods = methods
+                    paymentMethods = user?.reimbursementMethods.orEmpty()
                 )
             }
         }
@@ -64,6 +63,24 @@ class EditProfileViewModel(
                 }
                 .onFailure { error ->
                     _uiState.update { it.copy(isUploadingPhoto = false, errorMessage = error.message) }
+                }
+        }
+    }
+
+    fun deletePaymentMethod(method: PaymentMethod) {
+        viewModelScope.launch {
+            profileRepository.deletePaymentMethod(method)
+                .onSuccess {
+                    _uiState.update { state ->
+                        state.copy(
+                            paymentMethods = state.paymentMethods
+                                .filter { it.id != method.id }
+                                .mapIndexed { i, m -> m.copy(isPrimary = i == 0) }
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(errorMessage = error.message) }
                 }
         }
     }
