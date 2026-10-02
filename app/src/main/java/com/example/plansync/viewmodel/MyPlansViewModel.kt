@@ -133,6 +133,14 @@ class MyPlansViewModel(
                 result.add(plan)
             }
         }
-        return result
+
+        val withDate = result.filter { it.dateTime != null }
+        val withoutDate = result.filter { it.dateTime == null }
+        val sorted = if (tab == PlanStatus.PAST) {
+            withDate.sortedByDescending { it.dateTime }
+        } else {
+            withDate.sortedBy { it.dateTime }
+        }
+        return sorted + withoutDate
     }
 }

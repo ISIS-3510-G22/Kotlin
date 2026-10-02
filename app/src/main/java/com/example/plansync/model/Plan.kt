@@ -1,5 +1,7 @@
 package com.example.plansync.model
 
+import java.util.Date
+
 data class Plan(
     val id: String,
     val title: String,
@@ -11,7 +13,8 @@ data class Plan(
     val rating: Double = 0.0,
     val category: String = "",
     val planType: String = "",
-    val activityIds: List<String> = emptyList()
+    val activityIds: List<String> = emptyList(),
+    val dateTime: Date? = null
 ) {
     val activityCount: Int get() = activities.size
 
