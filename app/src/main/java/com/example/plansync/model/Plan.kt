@@ -10,7 +10,8 @@ data class Plan(
     val status: PlanStatus,
     val rating: Double = 0.0,
     val category: String = "",
-    val planType: String = ""
+    val planType: String = "",
+    val activityIds: List<String> = emptyList()
 ) {
     val activityCount: Int get() = activities.size
 

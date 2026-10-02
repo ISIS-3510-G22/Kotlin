@@ -5,7 +5,15 @@ import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
+import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.firestore
+import java.text.SimpleDateFormat
+import java.util.Locale
+import kotlin.coroutines.resume
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 class PlanRepository {
 
@@ -194,5 +202,48 @@ class PlanRepository {
         return Result.success(
             listOf(saturdayInBrooklyn, techConferenceSf, wineTastingInBogota, rooftopBrunch)
         )
+    }
+
+    suspend fun getMyPlans(): Result<List<Plan>> {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+            ?: return Result.failure(Exception("No active session."))
+
+        return suspendCancellableCoroutine { continuation ->
+            Firebase.firestore.collection("plans")
+                .whereArrayContains("participantsIds", uid)
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    val plans = snapshot.documents.map { doc ->
+                        Plan(
+                            id = doc.id,
+                            title = doc.getString("name").orEmpty(),
+                            date = doc.getTimestamp("date")
+                                ?.let { SimpleDateFormat("MMM d", Locale.US).format(it.toDate()) }
+                                .orEmpty(),
+                            estimatedCostPerPerson = 0,
+                            participants = (doc.get("participantsIds") as? List<*>).orEmpty()
+                                .filterIsInstance<String>()
+                                .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i) },
+                            activities = emptyList(),
+                            status = PlanStatus.CONFIRMED,
+                            activityIds = (doc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>()
+                        )
+                    }
+                    continuation.resume(Result.success(plans))
+                }
+                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }
+    }
+
+    suspend fun addActivityToPlan(planId: String, activityId: String, tags: List<String>): Result<Unit> {
+        val changes = mutableMapOf<String, Any>("activityIds" to FieldValue.arrayUnion(activityId))
+        if (tags.isNotEmpty()) changes["tags"] = FieldValue.arrayUnion(*tags.toTypedArray())
+
+        return suspendCancellableCoroutine { continuation ->
+            Firebase.firestore.collection("plans").document(planId)
+                .update(changes)
+                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
+                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }
     }
 }

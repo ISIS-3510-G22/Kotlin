@@ -11,13 +11,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class ActivityTab { FOR_YOU, LIKED, PRIVATE }
+
 class MyActivitiesViewModel(
     private val repository: ActivityRepository = ActivityRepository()
 ) : ViewModel() {
 
     data class UiState(
         val allActivities: List<Activity> = emptyList(),
-        val selectedTab: ActivityVisibility = ActivityVisibility.PUBLIC,
+        val selectedTab: ActivityTab = ActivityTab.FOR_YOU,
         val filteredActivities: List<Activity> = emptyList(),
         val isLoading: Boolean = false,
         val errorMessage: String? = null
@@ -36,7 +38,7 @@ class MyActivitiesViewModel(
                         current.copy(
                             isLoading = false,
                             allActivities = activities,
-                            filteredActivities = activities.filter { it.visibility == current.selectedTab }
+                            filteredActivities = filterFor(current.selectedTab, activities)
                         )
                     }
                 }
@@ -46,12 +48,23 @@ class MyActivitiesViewModel(
         }
     }
 
-    fun selectTab(tab: ActivityVisibility) {
+    fun selectTab(tab: ActivityTab) {
         _uiState.update { current ->
             current.copy(
                 selectedTab = tab,
-                filteredActivities = current.allActivities.filter { it.visibility == tab }
+                filteredActivities = filterFor(tab, current.allActivities)
             )
+        }
+    }
+
+    private fun filterFor(tab: ActivityTab, activities: List<Activity>): List<Activity> {
+        val uid = repository.currentUserId
+        return activities.filter {
+            when (tab) {
+                ActivityTab.FOR_YOU -> it.visibility == ActivityVisibility.PUBLIC
+                ActivityTab.LIKED -> uid in it.likedBy
+                ActivityTab.PRIVATE -> it.ownerId == uid && it.visibility == ActivityVisibility.PRIVATE
+            }
         }
     }
 }

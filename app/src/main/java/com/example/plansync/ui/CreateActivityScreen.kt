@@ -18,11 +18,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -48,11 +50,16 @@ import com.example.plansync.viewmodel.CreateActivityViewModel
 
 @Composable
 fun CreateActivityScreen(
+    activityId: String? = null,
     viewModel: CreateActivityViewModel = viewModel(),
     onBack: () -> Unit = {},
     onSaved: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(activityId) {
+        activityId?.let(viewModel::load)
+    }
 
     LaunchedEffect(uiState.didSave) {
         if (uiState.didSave) onSaved()
@@ -60,7 +67,12 @@ fun CreateActivityScreen(
 
     Scaffold(
         containerColor = Color(0xFFF5F5F5),
-        topBar = { CreateActivityTopBar(onBack = onBack) },
+        topBar = {
+            CreateActivityTopBar(
+                title = if (activityId == null) "Create Activity" else "Edit Activity",
+                onBack = onBack
+            )
+        },
         bottomBar = {
             CreateActivityBottomBar(
                 onCancel = onBack,
@@ -107,12 +119,25 @@ fun CreateActivityScreen(
             }
 
             item {
-                FormSectionLabel("CATEGORY")
+                FormSectionLabel("TAGS")
                 Spacer(Modifier.height(6.dp))
                 CategoryChipGrid(
-                    selected = uiState.category,
-                    onSelect = viewModel::onCategorySelect
+                    options = (ActivityCategories + uiState.tags).distinct(),
+                    selected = uiState.tags,
+                    onToggle = viewModel::onTagToggle
                 )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        FormTextField(
+                            value = uiState.customTag,
+                            onValueChange = viewModel::onCustomTagChange,
+                            placeholder = "Add your own tag"
+                        )
+                    }
+                    IconButton(onClick = viewModel::addCustomTag) {
+                        Icon(Icons.Filled.Add, contentDescription = "Add tag", tint = Coral)
+                    }
+                }
             }
 
             item {
@@ -162,7 +187,7 @@ fun CreateActivityScreen(
 // Top bar
 
 @Composable
-private fun CreateActivityTopBar(onBack: () -> Unit) {
+private fun CreateActivityTopBar(title: String, onBack: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -186,7 +211,7 @@ private fun CreateActivityTopBar(onBack: () -> Unit) {
         }
         Spacer(Modifier.width(12.dp))
         Text(
-            text = "Create Activity",
+            text = title,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold
         )
@@ -264,15 +289,15 @@ private fun FormTextField(
 // Category chips
 
 @Composable
-private fun CategoryChipGrid(selected: String, onSelect: (String) -> Unit) {
+private fun CategoryChipGrid(options: List<String>, selected: List<String>, onToggle: (String) -> Unit) {
     Column {
-        ActivityCategories.chunked(3).forEach { rowCategories ->
+        options.chunked(3).forEach { rowCategories ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 rowCategories.forEach { category ->
                     CategoryChip(
-                        label = category,
-                        isSelected = category == selected,
-                        onClick = { onSelect(category) }
+                        label = category.replaceFirstChar { it.uppercase() },
+                        isSelected = category in selected,
+                        onClick = { onToggle(category) }
                     )
                 }
             }
