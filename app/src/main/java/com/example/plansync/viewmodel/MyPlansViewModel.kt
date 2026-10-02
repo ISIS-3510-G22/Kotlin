@@ -33,7 +33,7 @@ class MyPlansViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-            repository.getPlans()
+            repository.getMyPlans()
                 .onSuccess { plans ->
                     _uiState.update { current ->
                         current.copy(

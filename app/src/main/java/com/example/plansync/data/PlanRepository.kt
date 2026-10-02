@@ -281,6 +281,8 @@ class PlanRepository {
                 .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
+    }
+
     suspend fun respondToInvite(planId: String, response: InviteResponse): Result<Unit> {
         delay(300)
         return Result.success(Unit)
