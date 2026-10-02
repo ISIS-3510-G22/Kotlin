@@ -110,7 +110,9 @@ class ActivityRepository {
         tags: List<String>,
         newCustomTags: List<String>,
         notes: String,
-        visibility: ActivityVisibility
+        visibility: ActivityVisibility,
+        lat: Double?,
+        lng: Double?
     ): Result<Unit> {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
@@ -125,6 +127,10 @@ class ActivityRepository {
             "visibility" to visibility.name.lowercase(),
             "tags" to tags
         )
+        if (lat != null && lng != null) {
+            data["lat"] = lat
+            data["lng"] = lng
+        }
         if (activityId == null) {
             data["ownerId"] = uid
             data["likedBy"] = emptyList<String>()
@@ -160,7 +166,9 @@ class ActivityRepository {
             ownerId = getString("ownerId").orEmpty(),
             likedBy = (get("likedBy") as? List<*>).orEmpty().filterIsInstance<String>(),
             tags = tags,
-            photoUrl = getString("photoUrl").orEmpty()
+            photoUrl = getString("photoUrl").orEmpty(),
+            lat = getDouble("lat"),
+            lng = getDouble("lng")
         )
     }
 

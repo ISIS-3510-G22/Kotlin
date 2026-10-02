@@ -16,7 +16,9 @@ data class Activity(
     val ownerId: String = "",
     val likedBy: List<String> = emptyList(),
     val tags: List<String> = emptyList(),
-    val photoUrl: String = ""
+    val photoUrl: String = "",
+    val lat: Double? = null,
+    val lng: Double? = null
 )
 
 enum class ActivityVisibility { PRIVATE, PUBLIC }

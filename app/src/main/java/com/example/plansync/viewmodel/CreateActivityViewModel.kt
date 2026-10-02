@@ -1,26 +1,38 @@
 package com.example.plansync.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.ActivityRepository
+import com.example.plansync.data.PlacesRepository
 import com.example.plansync.model.ActivityVisibility
+import com.example.plansync.model.PlaceResult
+import com.example.plansync.service.LocationService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 val ActivityCategories = listOf("food", "outdoors", "culture", "shopping")
 
-class CreateActivityViewModel(
-    private val repository: ActivityRepository = ActivityRepository()
-) : ViewModel() {
+class CreateActivityViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = ActivityRepository()
+    private val locationService = LocationService(application)
+    private val placesRepository = PlacesRepository(application)
+    private var searchJob: Job? = null
 
     data class UiState(
         val activityId: String? = null,
         val originalTags: List<String> = emptyList(),
         val placeName: String = "",
         val address: String = "",
+        val placeSuggestions: List<PlaceResult> = emptyList(),
+        val pickedLat: Double? = null,
+        val pickedLng: Double? = null,
         val expectedPrice: String = "",
         val tags: List<String> = emptyList(),
         val customTag: String = "",
@@ -58,7 +70,39 @@ class CreateActivityViewModel(
 
     fun onPlaceNameChange(value: String) = _uiState.update { it.copy(placeName = value) }
 
-    fun onAddressChange(value: String) = _uiState.update { it.copy(address = value) }
+    fun onAddressChange(value: String) {
+        _uiState.update { it.copy(address = value, pickedLat = null, pickedLng = null) }
+        searchJob?.cancel()
+        if (value.trim().length < 3) {
+            _uiState.update { it.copy(placeSuggestions = emptyList()) }
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(300)
+            val results = placesRepository.search(value.trim(), locationService.currentLocation())
+                .getOrDefault(emptyList())
+            _uiState.update { it.copy(placeSuggestions = results) }
+        }
+    }
+
+    fun onPlaceSelected(place: PlaceResult) {
+        searchJob?.cancel()
+        _uiState.update { it.copy(placeSuggestions = emptyList()) }
+        viewModelScope.launch {
+            placesRepository.details(place.id)
+                .onSuccess { details ->
+                    _uiState.update {
+                        it.copy(
+                            placeName = it.placeName.ifBlank { details.name },
+                            address = details.address,
+                            pickedLat = details.lat,
+                            pickedLng = details.lng
+                        )
+                    }
+                }
+                .onFailure { error -> _uiState.update { it.copy(errorMessage = error.message) } }
+        }
+    }
 
     fun onExpectedPriceChange(value: String) = _uiState.update { it.copy(expectedPrice = value) }
 
@@ -89,6 +133,9 @@ class CreateActivityViewModel(
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, errorMessage = null) }
+            val geocoded = if (current.pickedLat == null) locationService.coordinatesFor(current.address.trim()) else null
+            val lat = current.pickedLat ?: geocoded?.latitude
+            val lng = current.pickedLng ?: geocoded?.longitude
             repository.saveActivity(
                 activityId = current.activityId,
                 name = current.placeName.trim(),
@@ -97,7 +144,9 @@ class CreateActivityViewModel(
                 tags = current.tags,
                 newCustomTags = current.tags.filter { it !in ActivityCategories && it !in current.originalTags },
                 notes = current.notes.trim(),
-                visibility = current.visibility
+                visibility = current.visibility,
+                lat = lat,
+                lng = lng
             )
                 .onSuccess {
                     _uiState.update { it.copy(isSaving = false, didSave = true) }
