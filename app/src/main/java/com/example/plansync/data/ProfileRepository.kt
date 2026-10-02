@@ -7,6 +7,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
+import com.google.firebase.storage.storage
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
