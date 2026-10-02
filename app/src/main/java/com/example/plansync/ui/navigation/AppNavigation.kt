@@ -47,7 +47,9 @@ object Routes {
     const val MY_PLANS    = "my_plans"
     const val PLAN_DETAIL = "plan_detail/{planId}"
     const val INVITE      = "invite/{planId}"
-    const val CREATE_PLAN = "create_plan"
+    const val CREATE_PLAN = "create_plan?activityId={activityId}"
+    fun createPlan(activityId: String? = null) =
+        if (activityId != null) "create_plan?activityId=$activityId" else "create_plan"
     const val ACTIVITIES  = "activities"
     const val GROUPS      = "groups"
     const val PROFILE     = "profile"
@@ -180,8 +182,17 @@ fun MainNavHost(
             )
         }
 
-        composable(Routes.CREATE_PLAN) {
+        composable(
+            route = Routes.CREATE_PLAN,
+            arguments = listOf(navArgument("activityId") {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            })
+        ) { backStackEntry ->
+            val activityId = backStackEntry.arguments?.getString("activityId")
             CreatePlanScreen(
+                preselectedActivityId = activityId,
                 onBack = { navController.popBackStack() },
                 onSaved = { navController.popBackStack() }
             )

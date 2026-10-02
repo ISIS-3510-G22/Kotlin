@@ -1,10 +1,19 @@
 package com.example.plansync.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.plansync.data.ActivityRepository
+import com.example.plansync.data.PlanRepository
+import com.example.plansync.model.Activity
+import com.google.firebase.Timestamp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * ViewModel layer — MVVM architecture.
@@ -13,72 +22,163 @@ import kotlinx.coroutines.flow.update
  * Observer pattern: exposes [uiState] as StateFlow, collected by
  * CreatePlanScreen via collectAsStateWithLifecycle().
  *
- * The Composable never touches the repository directly.
- * TODO: wire onSavePlan() to Firestore once data model is ready.
+ * Design patterns:
+ *  - Repository pattern: delegates persistence to PlanRepository / ActivityRepository.
+ *  - Derived state: totalEstimatedCost and costPerPerson are computed from
+ *    selectedActivities, so the UI always shows a consistent value (smart feature).
  */
-class CreatePlanViewModel : ViewModel() {
-
-    /** A lightweight activity entry used while the plan is being drafted. */
-    data class DraftActivity(
-        val name: String,
-        val address: String
-    )
+class CreatePlanViewModel(
+    private val planRepository: PlanRepository = PlanRepository(),
+    private val activityRepository: ActivityRepository = ActivityRepository()
+) : ViewModel() {
 
     data class UiState(
         val planName: String = "",
-        val date: String = "",
-        val meetupTime: String = "",
+        val selectedDateMillis: Long? = null,
+        val selectedHour: Int = 10,
+        val selectedMinute: Int = 0,
         val locationText: String = "",
         val participantCount: Int = 1,
-        val activities: List<DraftActivity> = listOf(
-            DraftActivity("Dumbo House", "55 Water St, Brooklyn"),
-            DraftActivity("Devoción", "69 Grand St, Brooklyn")
-        ),
-        val totalEstimatedCost: Double = 10.0,
+        val isPublic: Boolean = false,
+        val availableActivities: List<Activity> = emptyList(),
+        val selectedActivities: List<Activity> = emptyList(),
+        val showDatePicker: Boolean = false,
+        val showTimePicker: Boolean = false,
+        val showActivityPicker: Boolean = false,
+        val isLoading: Boolean = false,
+        val errorMessage: String? = null,
         val isSaved: Boolean = false
     ) {
-        /** Smart feature: live cost per person derived from total and group size. */
+        /** Smart feature: total cost derived from selected activities' prices. */
+        val totalEstimatedCost: Double
+            get() = selectedActivities.sumOf { it.price.toDouble() }
+
+        /** Smart feature: cost per person updates live as participant count changes. */
         val costPerPerson: Double
-            get() = if (participantCount > 0) totalEstimatedCost / participantCount else totalEstimatedCost
+            get() = if (participantCount > 0) totalEstimatedCost / participantCount
+                    else totalEstimatedCost
+
+        val formattedDate: String
+            get() = selectedDateMillis?.let {
+                SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(it))
+            } ?: ""
+
+        val formattedTime: String
+            get() {
+                val h = selectedHour % 12
+                val display = if (h == 0) 12 else h
+                val amPm = if (selectedHour < 12) "AM" else "PM"
+                return "$display:${selectedMinute.toString().padStart(2, '0')} $amPm"
+            }
     }
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    fun onPlanNameChange(name: String) {
-        _uiState.update { it.copy(planName = name) }
-    }
+    init { loadAvailableActivities() }
 
-    fun onDateChange(date: String) {
-        _uiState.update { it.copy(date = date) }
-    }
+    // ── Load ───────────────────────────────────────────────────────────────────
 
-    fun onMeetupTimeChange(time: String) {
-        _uiState.update { it.copy(meetupTime = time) }
+    private fun loadAvailableActivities() {
+        viewModelScope.launch {
+            activityRepository.getActivities()
+                .onSuccess { activities ->
+                    _uiState.update { it.copy(availableActivities = activities) }
+                }
+        }
     }
 
     /**
-     * Sensor feature: stores the address string obtained from GPS + reverse geocoding.
-     * Called by the UI layer once location permission is granted and coordinates resolved.
+     * Sensor feature: called by the UI once GPS coordinates are resolved.
+     * Pre-populates the meetup location field.
      */
     fun onLocationDetected(location: String) {
         _uiState.update { it.copy(locationText = location) }
     }
 
-    /**
-     * Smart feature: updates group size and recomputes cost per person reactively.
-     * [UiState.costPerPerson] is a derived property — UI observes a single source of truth.
-     */
+    // ── Form field changes ─────────────────────────────────────────────────────
+
+    fun onPlanNameChange(name: String)  { _uiState.update { it.copy(planName = name) } }
+    fun onIsPublicChanged(v: Boolean)   { _uiState.update { it.copy(isPublic = v) } }
+
+    /** Smart feature: updates group size, cost-per-person recomputes reactively. */
     fun onParticipantCountChange(count: Int) {
         _uiState.update { it.copy(participantCount = count.coerceAtLeast(1)) }
     }
 
+    // ── Date / Time picker ─────────────────────────────────────────────────────
+
+    fun onShowDatePicker()               { _uiState.update { it.copy(showDatePicker = true) } }
+    fun onHideDatePicker()               { _uiState.update { it.copy(showDatePicker = false) } }
+    fun onDateSelected(millis: Long)     { _uiState.update { it.copy(selectedDateMillis = millis, showDatePicker = false) } }
+    fun onShowTimePicker()               { _uiState.update { it.copy(showTimePicker = true) } }
+    fun onHideTimePicker()               { _uiState.update { it.copy(showTimePicker = false) } }
+    fun onTimeSelected(hour: Int, minute: Int) {
+        _uiState.update { it.copy(selectedHour = hour, selectedMinute = minute, showTimePicker = false) }
+    }
+
+    // ── Activity picker ────────────────────────────────────────────────────────
+
+    fun onShowActivityPicker()           { _uiState.update { it.copy(showActivityPicker = true) } }
+    fun onHideActivityPicker()           { _uiState.update { it.copy(showActivityPicker = false) } }
+
+    fun onActivityToggled(activity: Activity) {
+        _uiState.update { state ->
+            val updated = if (state.selectedActivities.any { it.id == activity.id }) {
+                state.selectedActivities.filter { it.id != activity.id }
+            } else {
+                state.selectedActivities + activity
+            }
+            state.copy(selectedActivities = updated)
+        }
+    }
+
     /**
-     * Saves the plan draft.
-     * Sets [UiState.isSaved] to true to trigger navigation back.
-     * TODO: persist to Firestore.
+     * Pre-selects an activity by id — called when navigating from "Add to Plan"
+     * on the activity detail screen so the activity comes pre-populated.
+     */
+    fun preSelectActivity(activityId: String) {
+        viewModelScope.launch {
+            activityRepository.getActivities().onSuccess { activities ->
+                val activity = activities.find { it.id == activityId } ?: return@onSuccess
+                _uiState.update { it.copy(selectedActivities = listOf(activity)) }
+            }
+        }
+    }
+
+    fun onErrorDismissed() { _uiState.update { it.copy(errorMessage = null) } }
+
+    // ── Save ───────────────────────────────────────────────────────────────────
+
+    /**
+     * Validates the form, then calls [PlanRepository.createPlan] to write
+     * the document to Firestore. Sets [UiState.isSaved] on success to trigger
+     * back navigation via LaunchedEffect in the composable.
      */
     fun onSavePlan() {
-        _uiState.update { it.copy(isSaved = true) }
+        val state = _uiState.value
+        if (state.planName.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "Plan name is required.") }
+            return
+        }
+        if (state.selectedDateMillis == null) {
+            _uiState.update { it.copy(errorMessage = "Please select a date.") }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            planRepository.createPlan(
+                name        = state.planName,
+                date        = Timestamp(Date(state.selectedDateMillis)),
+                isPublic    = state.isPublic,
+                activityIds = state.selectedActivities.map { it.id },
+                tags        = state.selectedActivities.map { it.category }.distinct()
+            ).onSuccess {
+                _uiState.update { it.copy(isLoading = false, isSaved = true) }
+            }.onFailure { error ->
+                _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+            }
+        }
     }
 }

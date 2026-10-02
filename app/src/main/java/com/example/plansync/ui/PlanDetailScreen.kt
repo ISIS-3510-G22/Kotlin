@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -127,9 +128,9 @@ fun PlanDetailScreen(
         RsvpDialog(
             planTitle = uiState.plan!!.title,
             planMeta  = "${uiState.plan!!.date} · ${uiState.plan!!.participants.size} people invited",
-            onGoing      = { viewModel.onRsvpDismissed() },
-            onCantMake   = { viewModel.onRsvpDismissed() },
-            onMaybeLater = { viewModel.onRsvpDismissed() }
+            onGoing      = { viewModel.onRsvpGoing(planId) },
+            onCantMake   = { viewModel.onRsvpDeclined(planId) },
+            onMaybeLater = { viewModel.onRsvpDeferred(planId) }
         )
     }
 }
@@ -193,6 +194,13 @@ private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () 
 
 @Composable
 private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}) {
+    // Context-aware: check if plan date matches today's date using device clock.
+    val isToday = remember(plan.date) {
+        val today = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        plan.date.startsWith(today)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -205,6 +213,23 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}) {
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.ExtraBold
         )
+
+        if (isToday) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50.dp))
+                    .background(Coral)
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "Happening Today!",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(10.dp))
 
