@@ -8,16 +8,21 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.Filter
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.firestore
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.tasks.await
 
 class ActivityRepository {
 
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val activities = Firebase.firestore.collection("activities")
+    private val recommendationRuns = Firebase.firestore.collection("transferConfigs")
+        .document("6ad7a48c-0000-2678-8aba-fc4116908b71")
+        .collection("runs")
 
     val currentUserId: String? get() = auth.currentUser?.uid
 
@@ -54,6 +59,24 @@ class ActivityRepository {
                 }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
+
+    suspend fun getRecommended(): Result<List<Activity>> = runCatching {
+        val uid = auth.currentUser?.uid ?: throw Exception("No active session.")
+        val runId = recommendationRuns.document("latest").get().await().getString("latestRunId")
+            ?: return@runCatching emptyList()
+        val output = recommendationRuns.document(runId).collection("output")
+            .whereEqualTo("uid", uid)
+            .limit(1)
+            .get()
+            .await()
+        val idsMap = output.documents.firstOrNull()?.get("activity_ids") as? Map<*, *>
+            ?: return@runCatching emptyList()
+        val ids = List(idsMap.size) { i -> idsMap[i.toString()] as String }
+        if (ids.isEmpty()) return@runCatching emptyList()
+        activities.whereIn(FieldPath.documentId(), ids).get().await()
+            .documents.map { it.toActivity() }
+            .sortedBy { ids.indexOf(it.id) }
+    }
 
     suspend fun setLiked(activityId: String, liked: Boolean): Result<Unit> {
         val uid = auth.currentUser?.uid

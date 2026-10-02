@@ -41,6 +41,7 @@ class CreatePlanViewModel(
         val participantCount: Int = 1,
         val isPublic: Boolean = false,
         val availableActivities: List<Activity> = emptyList(),
+        val recommendedActivities: List<Activity> = emptyList(),
         val selectedActivities: List<Activity> = emptyList(),
         val showDatePicker: Boolean = false,
         val showTimePicker: Boolean = false,
@@ -75,7 +76,10 @@ class CreatePlanViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    init { loadAvailableActivities() }
+    init {
+        loadAvailableActivities()
+        loadRecommendedActivities()
+    }
 
     // ── Load ───────────────────────────────────────────────────────────────────
 
@@ -84,6 +88,15 @@ class CreatePlanViewModel(
             activityRepository.getActivities()
                 .onSuccess { activities ->
                     _uiState.update { it.copy(availableActivities = activities) }
+                }
+        }
+    }
+
+    private fun loadRecommendedActivities() {
+        viewModelScope.launch {
+            activityRepository.getRecommended()
+                .onSuccess { activities ->
+                    _uiState.update { it.copy(recommendedActivities = activities) }
                 }
         }
     }
