@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
@@ -284,6 +285,7 @@ fun EditProfileScreen(
             uiState.paymentMethods.forEach { method ->
                 PaymentMethodCard(
                     method = method,
+                    onDelete = { viewModel.deletePaymentMethod(method) },
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
             }
@@ -364,7 +366,7 @@ private fun EditProfileField(
 }
 
 @Composable
-private fun PaymentMethodCard(method: PaymentMethod, modifier: Modifier = Modifier) {
+private fun PaymentMethodCard(method: PaymentMethod, onDelete: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -424,6 +426,13 @@ private fun PaymentMethodCard(method: PaymentMethod, modifier: Modifier = Modifi
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = "Delete",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
