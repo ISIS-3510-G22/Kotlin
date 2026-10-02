@@ -32,21 +32,13 @@ class ProfileRepository {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
-        val photoRef = Firebase.storage.reference.child("profile_photos/$uid.jpg")
+        val photoUrl = StorageRepository().uploadImage("profile_photos/$uid.jpg", uri)
+            .getOrElse { return Result.failure(it) }
 
         return suspendCancellableCoroutine { continuation ->
-            photoRef.putFile(uri)
-                .addOnSuccessListener {
-                    photoRef.downloadUrl
-                        .addOnSuccessListener { downloadUri ->
-                            val photoUrl = downloadUri.toString()
-                            Firebase.firestore.collection("users").document(uid)
-                                .update("photoUrl", photoUrl)
-                                .addOnSuccessListener { continuation.resume(Result.success(photoUrl)) }
-                                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-                        }
-                        .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-                }
+            Firebase.firestore.collection("users").document(uid)
+                .update("photoUrl", photoUrl)
+                .addOnSuccessListener { continuation.resume(Result.success(photoUrl)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
     }
