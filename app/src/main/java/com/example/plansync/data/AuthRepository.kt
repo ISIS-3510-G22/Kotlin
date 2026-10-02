@@ -1,5 +1,7 @@
 package com.example.plansync.data
 
+import com.example.plansync.model.PaymentMethod
+import com.example.plansync.model.PaymentMethodType
 import com.example.plansync.model.User
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -115,7 +117,19 @@ class AuthRepository {
                             lastName = document.getString("lastName") ?: "",
                             username = document.getString("username") ?: "",
                             phone = document.getString("phone") ?: "",
-                            photoUrl = document.getString("photoUrl") ?: ""
+                            photoUrl = document.getString("photoUrl") ?: "",
+                            reimbursementMethods = (document.get("reimbursementMethods") as? List<Map<String, Any>>)
+                                .orEmpty()
+                                .mapIndexed { i, m ->
+                                    val type = m["type"] as? String ?: ""
+                                    PaymentMethod(
+                                        id = m["id"] as? String ?: "",
+                                        label = type,
+                                        detail = m["account"] as? String ?: "",
+                                        type = if (type.contains("venmo", ignoreCase = true)) PaymentMethodType.VENMO else PaymentMethodType.BANK,
+                                        isPrimary = i == 0
+                                    )
+                                }
                         )
                     )
                 }
