@@ -12,6 +12,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.firestore
 import com.google.firebase.firestore.FieldValue
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.coroutines.resume
 import kotlinx.coroutines.delay
@@ -250,19 +251,21 @@ class PlanRepository {
                 .get()
                 .addOnSuccessListener { snapshot ->
                     val plans = snapshot.documents.map { doc ->
+                        val dateTime = doc.getTimestamp("date")?.toDate()
                         Plan(
                             id = doc.id,
                             title = doc.getString("name").orEmpty(),
-                            date = doc.getTimestamp("date")
-                                ?.let { SimpleDateFormat("MMM d", Locale.US).format(it.toDate()) }
+                            date = dateTime
+                                ?.let { SimpleDateFormat("MMM d", Locale.US).format(it) }
                                 .orEmpty(),
                             estimatedCostPerPerson = 0,
                             participants = (doc.get("participantsIds") as? List<*>).orEmpty()
                                 .filterIsInstance<String>()
                                 .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i) },
                             activities = emptyList(),
-                            status = PlanStatus.CONFIRMED,
-                            activityIds = (doc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>()
+                            status = if (dateTime != null && dateTime.before(Date())) PlanStatus.PAST else PlanStatus.CONFIRMED,
+                            activityIds = (doc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>(),
+                            dateTime = dateTime
                         )
                     }
                     continuation.resume(Result.success(plans))

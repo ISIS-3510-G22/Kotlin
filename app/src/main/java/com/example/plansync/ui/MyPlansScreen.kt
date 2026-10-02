@@ -31,6 +31,8 @@ import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.MyPlansViewModel
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Composable
 fun MyPlansScreen(
@@ -275,7 +277,7 @@ private fun PlanCard(plan: Plan, onClick: () -> Unit = {}, modifier: Modifier = 
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "${plan.date} • ${participantCountLabel(plan.participants)}",
+                        text = "${planDateText(plan)} • ${participantCountLabel(plan.participants)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF888888)
                     )
@@ -328,8 +330,14 @@ private fun PlanCard(plan: Plan, onClick: () -> Unit = {}, modifier: Modifier = 
     }
 }
 
+private fun planDateText(plan: Plan): String {
+    val dateTime = plan.dateTime ?: return plan.date
+    val pattern = if (plan.status == PlanStatus.PAST) "MMM d · h:mm a" else "MMM d"
+    return SimpleDateFormat(pattern, Locale.US).format(dateTime)
+}
+
 private fun participantCountLabel(participants: List<Participant>): String {
-    return if (participants.isEmpty()) "Solo Trip" else "${participants.size} People"
+    return if (participants.size <= 1) "Solo Trip" else "${participants.size} People"
 }
 
 private val avatarColors = listOf(
@@ -374,12 +382,21 @@ private fun ParticipantAvatar(participant: Participant) {
             .border(2.dp, Color.White, CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = participant.initials,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = textColor
-        )
+        if (participant.initials.isEmpty()) {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = null,
+                tint = textColor,
+                modifier = Modifier.size(18.dp)
+            )
+        } else {
+            Text(
+                text = participant.initials,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = textColor
+            )
+        }
     }
 }
 
