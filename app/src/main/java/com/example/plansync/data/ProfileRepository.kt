@@ -6,6 +6,7 @@ import com.example.plansync.model.PaymentMethodType
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.storage
 import java.util.UUID
@@ -22,7 +23,7 @@ class ProfileRepository {
 
         return suspendCancellableCoroutine { continuation ->
             Firebase.firestore.collection("users").document(uid)
-                .update(mapOf("name" to name, "lastName" to lastName, "phone" to phone))
+                .set(mapOf("name" to name, "lastName" to lastName, "phone" to phone), SetOptions.merge())
                 .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
@@ -37,7 +38,7 @@ class ProfileRepository {
 
         return suspendCancellableCoroutine { continuation ->
             Firebase.firestore.collection("users").document(uid)
-                .update("photoUrl", photoUrl)
+                .set(mapOf("photoUrl" to photoUrl), SetOptions.merge())
                 .addOnSuccessListener { continuation.resume(Result.success(photoUrl)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
@@ -57,7 +58,7 @@ class ProfileRepository {
 
         return suspendCancellableCoroutine { continuation ->
             Firebase.firestore.collection("users").document(uid)
-                .update("reimbursementMethods", FieldValue.arrayUnion(data))
+                .set(mapOf("reimbursementMethods" to FieldValue.arrayUnion(data)), SetOptions.merge())
                 .addOnSuccessListener { continuation.resume(Result.success(method)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
@@ -71,7 +72,7 @@ class ProfileRepository {
 
         return suspendCancellableCoroutine { continuation ->
             Firebase.firestore.collection("users").document(uid)
-                .update("reimbursementMethods", FieldValue.arrayRemove(data))
+                .set(mapOf("reimbursementMethods" to FieldValue.arrayRemove(data)), SetOptions.merge())
                 .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
