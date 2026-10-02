@@ -28,13 +28,19 @@ class CreatePlanViewModel : ViewModel() {
         val planName: String = "",
         val date: String = "",
         val meetupTime: String = "",
+        val locationText: String = "",
+        val participantCount: Int = 1,
         val activities: List<DraftActivity> = listOf(
             DraftActivity("Dumbo House", "55 Water St, Brooklyn"),
             DraftActivity("Devoción", "69 Grand St, Brooklyn")
         ),
         val totalEstimatedCost: Double = 10.0,
         val isSaved: Boolean = false
-    )
+    ) {
+        /** Smart feature: live cost per person derived from total and group size. */
+        val costPerPerson: Double
+            get() = if (participantCount > 0) totalEstimatedCost / participantCount else totalEstimatedCost
+    }
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -49,6 +55,22 @@ class CreatePlanViewModel : ViewModel() {
 
     fun onMeetupTimeChange(time: String) {
         _uiState.update { it.copy(meetupTime = time) }
+    }
+
+    /**
+     * Sensor feature: stores the address string obtained from GPS + reverse geocoding.
+     * Called by the UI layer once location permission is granted and coordinates resolved.
+     */
+    fun onLocationDetected(location: String) {
+        _uiState.update { it.copy(locationText = location) }
+    }
+
+    /**
+     * Smart feature: updates group size and recomputes cost per person reactively.
+     * [UiState.costPerPerson] is a derived property — UI observes a single source of truth.
+     */
+    fun onParticipantCountChange(count: Int) {
+        _uiState.update { it.copy(participantCount = count.coerceAtLeast(1)) }
     }
 
     /**

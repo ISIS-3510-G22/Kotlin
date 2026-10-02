@@ -48,12 +48,12 @@ class PlanDetailViewModel(
      * Safe to call multiple times — subsequent calls replace previous state.
      * Coroutine is scoped to [viewModelScope] to prevent leaks.
      */
-    fun onRsvpDismissed() {
-        _uiState.update { it.copy(showRsvpDialog = false) }
-    }
-
     fun onRsvpTriggered() {
         _uiState.update { it.copy(showRsvpDialog = true) }
+    }
+
+    fun onRsvpDismissed() {
+        _uiState.update { it.copy(showRsvpDialog = false) }
     }
 
     fun loadPlan(planId: String) {
