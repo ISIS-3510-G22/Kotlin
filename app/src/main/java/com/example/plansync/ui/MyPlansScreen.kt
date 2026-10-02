@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -96,7 +97,13 @@ fun MyPlansScreen(
                         items(uiState.filteredPlans) { plan ->
                             PlanCard(
                                 plan = plan,
-                                onClick = { onPlanSelected(plan.id) },
+                                onClick = {
+                                    if (plan.status == PlanStatus.PENDING_INVITE) {
+                                        viewModel.onInviteTapped(plan)
+                                    } else {
+                                        onPlanSelected(plan.id)
+                                    }
+                                },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
@@ -105,9 +112,34 @@ fun MyPlansScreen(
             }
         }
     }
+
+    val selectedInvite = uiState.selectedInvite
+    if (selectedInvite != null) {
+        RsvpDialog(
+            planTitle = selectedInvite.title,
+            planMeta = inviteMetaText(selectedInvite),
+            onGoing = { viewModel.onInviteGoing() },
+            onCantMake = { viewModel.onInviteCantMake() },
+            onMaybeLater = { viewModel.onInviteDismissed() }
+        )
+    }
 }
 
-// Top
+private fun inviteMetaText(plan: Plan): String {
+    val dateParts = plan.date.split(" · ")
+    val dayWithYear = dateParts[0]
+    val dayWithoutYear = dayWithYear.substringBefore(",")
+
+    var dateText = dayWithoutYear
+    if (dateParts.size > 1) {
+        val time = dateParts[1]
+        dateText = "$dayWithoutYear - $time"
+    }
+
+    val peopleCount = plan.participants.size
+    return "$dateText · $peopleCount people invited"
+}
+
 @Composable
 private fun MyPlansTopBar(onCreatePlan: () -> Unit = {}) {
     Row(
@@ -132,8 +164,6 @@ private fun MyPlansTopBar(onCreatePlan: () -> Unit = {}) {
         }
     }
 }
-
-// Mid
 
 private fun tabLabel(status: PlanStatus): String = when (status) {
     PlanStatus.CONFIRMED -> "Upcoming"
@@ -192,8 +222,6 @@ private fun MyPlansTab(
     }
 }
 
-// Empty state
-
 private fun emptyStateMessage(tab: PlanStatus): String = when (tab) {
     PlanStatus.CONFIRMED -> "No upcoming plans."
     PlanStatus.PENDING_INVITE -> "No pending invites."
@@ -210,8 +238,6 @@ private fun EmptyPlansMessage(tab: PlanStatus) {
         )
     }
 }
-
-// Planes
 
 @Composable
 private fun PlanCard(plan: Plan, onClick: () -> Unit = {}, modifier: Modifier = Modifier) {
@@ -243,7 +269,9 @@ private fun PlanCard(plan: Plan, onClick: () -> Unit = {}, modifier: Modifier = 
                     Text(
                         text = plan.title,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -303,8 +331,6 @@ private fun PlanCard(plan: Plan, onClick: () -> Unit = {}, modifier: Modifier = 
 private fun participantCountLabel(participants: List<Participant>): String {
     return if (participants.isEmpty()) "Solo Trip" else "${participants.size} People"
 }
-
-// avatares
 
 private val avatarColors = listOf(
     Coral,
@@ -393,8 +419,6 @@ private fun SoloTripIcon() {
         )
     }
 }
-
-// NavBar
 
 private data class MyPlansNavItem(
     val label: String,
