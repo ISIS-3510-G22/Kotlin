@@ -2,6 +2,7 @@ package com.example.plansync.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.plansync.data.AnalyticsRepository
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
@@ -24,7 +25,8 @@ import kotlinx.coroutines.launch
  * touches [PlanRepository] directly.
  */
 class PlanDetailViewModel(
-    private val repository: PlanRepository = PlanRepository()
+    private val repository: PlanRepository = PlanRepository(),
+    private val analyticsRepository: AnalyticsRepository = AnalyticsRepository()
 ) : ViewModel() {
 
     /**
@@ -52,7 +54,26 @@ class PlanDetailViewModel(
         _uiState.update { it.copy(showRsvpDialog = true) }
     }
 
+    /** Dismisses the RSVP dialog without logging (e.g. back-press or auto-close). */
     fun onRsvpDismissed() {
+        _uiState.update { it.copy(showRsvpDialog = false) }
+    }
+
+    /** Analytics: user confirmed attendance — logs rsvp_confirmed event. */
+    fun onRsvpGoing(planId: String) {
+        analyticsRepository.logEvent(AnalyticsRepository.RSVP_CONFIRMED, planId)
+        _uiState.update { it.copy(showRsvpDialog = false) }
+    }
+
+    /** Analytics: user declined — logs rsvp_declined event. */
+    fun onRsvpDeclined(planId: String) {
+        analyticsRepository.logEvent(AnalyticsRepository.RSVP_DECLINED, planId)
+        _uiState.update { it.copy(showRsvpDialog = false) }
+    }
+
+    /** Analytics: user deferred — logs rsvp_deferred event. */
+    fun onRsvpDeferred(planId: String) {
+        analyticsRepository.logEvent(AnalyticsRepository.RSVP_DEFERRED, planId)
         _uiState.update { it.copy(showRsvpDialog = false) }
     }
 
