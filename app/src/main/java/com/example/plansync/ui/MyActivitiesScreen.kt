@@ -1,5 +1,8 @@
 package com.example.plansync.ui
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,8 +47,15 @@ fun MyActivitiesScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val locationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { viewModel.onLocationPermissionResult() }
+
     LaunchedEffect(Unit) {
         viewModel.loadActivities()
+        locationLauncher.launch(
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        )
     }
 
     Scaffold(
@@ -107,6 +117,7 @@ fun MyActivitiesScreen(
                         items(uiState.filteredActivities) { activity ->
                             ActivityCard(
                                 activity = activity,
+                                distanceKm = uiState.distancesKm[activity.id],
                                 onClick = { onActivitySelected(activity.id) },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
@@ -214,7 +225,12 @@ private fun EmptyActivitiesMessage(tab: ActivityTab) {
 // Activity card
 
 @Composable
-fun ActivityCard(activity: Activity, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun ActivityCard(
+    activity: Activity,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    distanceKm: Float? = null
+) {
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
@@ -282,6 +298,15 @@ fun ActivityCard(activity: Activity, onClick: () -> Unit, modifier: Modifier = M
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFF888888)
                 )
+                distanceKm?.let {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "%.1f km away".format(it),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Coral
+                    )
+                }
             }
         }
     }

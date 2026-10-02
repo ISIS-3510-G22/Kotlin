@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.plansync.model.ActivityVisibility
+import com.example.plansync.model.PlaceResult
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.ActivityCategories
 import com.example.plansync.viewmodel.CreateActivityViewModel
@@ -103,9 +104,15 @@ fun CreateActivityScreen(
                 FormTextField(
                     value = uiState.address,
                     onValueChange = viewModel::onAddressChange,
-                    placeholder = "Address or location",
+                    placeholder = "Search a place or address",
                     leadingIcon = Icons.Filled.LocationOn
                 )
+                if (uiState.placeSuggestions.isNotEmpty()) {
+                    PlaceSuggestionList(
+                        places = uiState.placeSuggestions,
+                        onSelect = viewModel::onPlaceSelected
+                    )
+                }
             }
 
             item {
@@ -284,6 +291,39 @@ private fun FormTextField(
             focusedContainerColor = Color.White
         )
     )
+}
+
+// Place suggestions
+
+@Composable
+private fun PlaceSuggestionList(places: List<PlaceResult>, onSelect: (PlaceResult) -> Unit) {
+    Column(
+        modifier = Modifier
+            .padding(top = 4.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
+    ) {
+        places.forEach { place ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelect(place) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text(place.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Text(place.address, style = MaterialTheme.typography.bodySmall, color = Color(0xFF888888))
+            }
+        }
+        Text(
+            text = "Powered by Google",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFF888888),
+            modifier = Modifier
+                .align(Alignment.End)
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+        )
+    }
 }
 
 // Category chips
