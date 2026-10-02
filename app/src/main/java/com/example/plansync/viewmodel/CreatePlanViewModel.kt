@@ -170,7 +170,15 @@ class CreatePlanViewModel(
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             planRepository.createPlan(
                 name        = state.planName,
-                date        = Timestamp(Date(state.selectedDateMillis)),
+                date        = Timestamp(
+                    java.util.Calendar.getInstance().apply {
+                        timeInMillis = state.selectedDateMillis
+                        set(java.util.Calendar.HOUR_OF_DAY, state.selectedHour)
+                        set(java.util.Calendar.MINUTE, state.selectedMinute)
+                        set(java.util.Calendar.SECOND, 0)
+                        set(java.util.Calendar.MILLISECOND, 0)
+                    }.time
+                ),
                 isPublic    = state.isPublic,
                 activityIds = state.selectedActivities.map { it.id },
                 tags        = state.selectedActivities.map { it.category }.distinct()
