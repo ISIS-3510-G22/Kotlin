@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -400,6 +401,24 @@ fun CreatePlanScreen(
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Coral)
                 ) {
                     Text("+ Add Activity", fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            val recommended = uiState.recommendedActivities.filter { rec ->
+                uiState.selectedActivities.none { it.id == rec.id }
+            }
+            if (recommended.isNotEmpty()) {
+                item {
+                    FormSectionLabel("RECOMMENDED FOR YOU")
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "You might like these activities based on your previous activity",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF888888)
+                    )
+                }
+                items(recommended, key = { it.id }) { activity ->
+                    ActivityCard(activity = activity, onClick = { viewModel.onActivityToggled(activity) })
                 }
             }
 
