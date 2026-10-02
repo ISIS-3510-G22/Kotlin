@@ -2,6 +2,7 @@ package com.example.plansync.data
 
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
+import com.example.plansync.model.InviteResponse
 import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
@@ -10,7 +11,7 @@ import kotlinx.coroutines.delay
 class PlanRepository {
 
     suspend fun getPlan(planId: String): Result<Plan> {
-        delay(800) // simulado pero backend
+        delay(800)
 
         if (planId.startsWith("error")) {
             return Result.failure(Exception("Plan not found."))
@@ -194,5 +195,10 @@ class PlanRepository {
         return Result.success(
             listOf(saturdayInBrooklyn, techConferenceSf, wineTastingInBogota, rooftopBrunch)
         )
+    }
+
+    suspend fun respondToInvite(planId: String, response: InviteResponse): Result<Unit> {
+        delay(300)
+        return Result.success(Unit)
     }
 }
