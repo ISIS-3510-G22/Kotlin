@@ -5,9 +5,49 @@ import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
+import com.google.firebase.Firebase
+import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.firestore
+import kotlin.coroutines.resume
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 class PlanRepository {
+
+    private val auth = FirebaseAuth.getInstance()
+
+    /**
+     * Data layer — creates a new plan document in Firestore.
+     * Matches the Flutter schema: name, date, isPublic, creatorId,
+     * participantsIds, activityIds, tags, invitations.
+     */
+    suspend fun createPlan(
+        name: String,
+        date: Timestamp,
+        isPublic: Boolean,
+        activityIds: List<String>,
+        tags: List<String>
+    ): Result<String> {
+        val uid = auth.currentUser?.uid
+            ?: return Result.failure(Exception("No active session."))
+
+        return suspendCancellableCoroutine { continuation ->
+            val data = hashMapOf(
+                "name"             to name,
+                "date"             to date,
+                "isPublic"         to isPublic,
+                "creatorId"        to uid,
+                "participantsIds"  to listOf(uid),
+                "activityIds"      to activityIds,
+                "tags"             to tags,
+                "invitations"      to emptyList<String>()
+            )
+            Firebase.firestore.collection("plans").add(data)
+                .addOnSuccessListener { ref -> continuation.resume(Result.success(ref.id)) }
+                .addOnFailureListener { e  -> continuation.resume(Result.failure(e)) }
+        }
+    }
 
     suspend fun getPlan(planId: String): Result<Plan> {
         delay(800) // simulado pero backend
