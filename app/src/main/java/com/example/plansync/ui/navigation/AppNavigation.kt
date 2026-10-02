@@ -27,18 +27,25 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.example.plansync.ui.ActivityDetailScreen
+import com.example.plansync.ui.AddFriendScreen
 import com.example.plansync.ui.AddPaymentMethodScreen
 import com.example.plansync.ui.AddToPlanScreen
 import com.example.plansync.ui.CreateActivityScreen
 import com.example.plansync.ui.CreatePlanScreen
+import com.example.plansync.ui.CreateGroupScreen
 import com.example.plansync.ui.EditProfileScreen
 import com.example.plansync.ui.ExploreScreen
+import com.example.plansync.ui.FriendRequestsScreen
+import com.example.plansync.ui.GroupDetailScreen
+import com.example.plansync.ui.GroupInvitesScreen
+import com.example.plansync.ui.InviteToGroupScreen
 import com.example.plansync.ui.InviteScreen
 import com.example.plansync.ui.MyActivitiesScreen
 import com.example.plansync.ui.MyCrewScreen
 import com.example.plansync.ui.MyPlansScreen
 import com.example.plansync.ui.PlanDetailScreen
 import com.example.plansync.ui.ProfileScreen
+import com.example.plansync.ui.UserDetailScreen
 
 
 
@@ -59,12 +66,22 @@ object Routes {
     const val ACTIVITY_DETAIL = "activity_detail/{activityId}"
     const val EDIT_ACTIVITY = "edit_activity/{activityId}"
     const val ADD_TO_PLAN = "add_to_plan/{activityId}"
+    const val CREATE_GROUP = "create_group"
+    const val GROUP_DETAIL = "group_detail/{groupId}"
+    const val ADD_FRIEND = "add_friend"
+    const val FRIEND_REQUESTS = "friend_requests"
+    const val GROUP_INVITES = "group_invites"
+    const val INVITE_TO_GROUP = "invite_to_group/{groupId}"
+    const val USER_DETAIL = "user_detail/{userId}"
 
     fun planDetail(planId: String) = "plan_detail/$planId"
     fun invite(planId: String)     = "invite/$planId"
     fun activityDetail(activityId: String) = "activity_detail/$activityId"
     fun editActivity(activityId: String) = "edit_activity/$activityId"
     fun addToPlan(activityId: String) = "add_to_plan/$activityId"
+    fun groupDetail(groupId: String) = "group_detail/$groupId"
+    fun inviteToGroup(groupId: String) = "invite_to_group/$groupId"
+    fun userDetail(userId: String) = "user_detail/$userId"
 }
 
 
@@ -256,7 +273,68 @@ fun MainNavHost(
                 onExploreSelected = { navController.navigate(Routes.EXPLORE) },
                 onMyPlansSelected = { navController.navigate(Routes.MY_PLANS) },
                 onMyActivitiesSelected = { navController.navigate(Routes.ACTIVITIES) },
-                onProfileSelected = { navController.navigate(Routes.PROFILE) }
+                onProfileSelected = { navController.navigate(Routes.PROFILE) },
+                onCreateGroup = { navController.navigate(Routes.CREATE_GROUP) },
+                onGroupSelected = { id -> navController.navigate(Routes.groupDetail(id)) },
+                onAddFriend = { navController.navigate(Routes.ADD_FRIEND) },
+                onFriendRequests = { navController.navigate(Routes.FRIEND_REQUESTS) },
+                onGroupInvites = { navController.navigate(Routes.GROUP_INVITES) },
+                onFriendSelected = { id -> navController.navigate(Routes.userDetail(id)) }
+            )
+        }
+
+        composable(Routes.ADD_FRIEND) {
+            AddFriendScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.FRIEND_REQUESTS) {
+            FriendRequestsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.CREATE_GROUP) {
+            CreateGroupScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Routes.GROUP_DETAIL,
+            arguments = listOf(navArgument("groupId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            GroupDetailScreen(
+                groupId = backStackEntry.arguments?.getString("groupId").orEmpty(),
+                onBack = { navController.popBackStack() },
+                onInvite = { id -> navController.navigate(Routes.inviteToGroup(id)) }
+            )
+        }
+
+        composable(
+            route = Routes.INVITE_TO_GROUP,
+            arguments = listOf(navArgument("groupId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            InviteToGroupScreen(
+                groupId = backStackEntry.arguments?.getString("groupId").orEmpty(),
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.GROUP_INVITES) {
+            GroupInvitesScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Routes.USER_DETAIL,
+            arguments = listOf(navArgument("userId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            UserDetailScreen(
+                userId = backStackEntry.arguments?.getString("userId").orEmpty(),
+                onBack = { navController.popBackStack() }
             )
         }
 
