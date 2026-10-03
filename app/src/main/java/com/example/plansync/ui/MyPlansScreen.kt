@@ -43,7 +43,8 @@ fun MyPlansScreen(
     onMyCrewSelected: () -> Unit = {},
     onPlanSelected: (String) -> Unit = {},
     onCreatePlan: () -> Unit = {},
-    onLeaveReview: (String) -> Unit = {}
+    onLeaveReview: (String) -> Unit = {},
+    onManageSplits: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -108,6 +109,7 @@ fun MyPlansScreen(
                                     }
                                 },
                                 onLeaveReview = { onLeaveReview(plan.id) },
+                                onManageSplits = { onManageSplits(plan.id) },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
@@ -248,6 +250,7 @@ private fun PlanCard(
     plan: Plan,
     onClick: () -> Unit = {},
     onLeaveReview: () -> Unit = {},
+    onManageSplits: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -302,7 +305,7 @@ private fun PlanCard(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
-                        onClick = { },
+                        onClick = onManageSplits,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
