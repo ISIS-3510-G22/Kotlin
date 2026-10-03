@@ -75,16 +75,31 @@ fun MyPlansScreen(
                 onTabSelected = viewModel::selectTab
             )
 
+            if (uiState.respondError != null) {
+                Text(
+                    text = uiState.respondError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
+            val listError = if (uiState.selectedTab == PlanStatus.PENDING_INVITE) {
+                uiState.invitesError
+            } else {
+                uiState.errorMessage
+            }
+
             when {
                 uiState.isLoading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = Coral)
                     }
                 }
-                uiState.errorMessage != null -> {
+                listError != null -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = uiState.errorMessage!!,
+                            text = listError,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyLarge
                         )
@@ -132,18 +147,8 @@ fun MyPlansScreen(
 }
 
 private fun inviteMetaText(plan: Plan): String {
-    val dateParts = plan.date.split(" · ")
-    val dayWithYear = dateParts[0]
-    val dayWithoutYear = dayWithYear.substringBefore(",")
-
-    var dateText = dayWithoutYear
-    if (dateParts.size > 1) {
-        val time = dateParts[1]
-        dateText = "$dayWithoutYear - $time"
-    }
-
     val peopleCount = plan.participants.size
-    return "$dateText · $peopleCount people invited"
+    return "${planDateText(plan)} · $peopleCount people invited"
 }
 
 @Composable

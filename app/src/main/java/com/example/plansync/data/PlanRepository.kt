@@ -274,6 +274,35 @@ class PlanRepository(
         }
     }
 
+    suspend fun getMyInvites(): Result<List<Plan>> {
+        val uid = auth.currentUser?.uid
+            ?: return Result.failure(Exception("No active session."))
+
+        return suspendCancellableCoroutine { continuation ->
+            db.collection("plans")
+                .whereArrayContains("invitations", uid)
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    continuation.resume(Result.success(snapshot.documents.map { it.toInvitePlan() }))
+                }
+                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }
+    }
+
+    private fun DocumentSnapshot.toInvitePlan(): Plan =
+        Plan(
+            id = id,
+            title = getString("name").orEmpty(),
+            date = "",
+            estimatedCostPerPerson = 0,
+            participants = (get("participantsIds") as? List<*>).orEmpty()
+                .filterIsInstance<String>()
+                .mapIndexed { i, participantId -> Participant(id = participantId, initials = "", avatarColorIndex = i) },
+            activities = emptyList(),
+            status = PlanStatus.PENDING_INVITE,
+            dateTime = getTimestamp("date")?.toDate()
+        )
+
     suspend fun addActivityToPlan(planId: String, activityId: String, tags: List<String>): Result<Unit> {
         val changes = mutableMapOf<String, Any>("activityIds" to FieldValue.arrayUnion(activityId))
         if (tags.isNotEmpty()) changes["tags"] = FieldValue.arrayUnion(*tags.toTypedArray())
@@ -287,7 +316,25 @@ class PlanRepository(
     }
 
     suspend fun respondToInvite(planId: String, response: InviteResponse): Result<Unit> {
-        delay(300)
-        return Result.success(Unit)
+        val uid = auth.currentUser?.uid
+            ?: return Result.failure(Exception("No active session."))
+
+        val changes = when (response) {
+            InviteResponse.GOING -> mapOf(
+                "invitations" to FieldValue.arrayRemove(uid),
+                "participantsIds" to FieldValue.arrayUnion(uid)
+            )
+            InviteResponse.CANT_MAKE -> mapOf(
+                "invitations" to FieldValue.arrayRemove(uid),
+                "declinedIds" to FieldValue.arrayUnion(uid)
+            )
+        }
+
+        return suspendCancellableCoroutine { continuation ->
+            db.collection("plans").document(planId)
+                .update(changes)
+                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
+                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }
     }
 }

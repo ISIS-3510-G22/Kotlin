@@ -12,17 +12,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-
 class MyPlansViewModel(
     private val repository: PlanRepository = PlanRepository()
 ) : ViewModel() {
 
     data class UiState(
         val allPlans: List<Plan> = emptyList(),
+        val invites: List<Plan> = emptyList(),
         val selectedTab: PlanStatus = PlanStatus.CONFIRMED,
         val filteredPlans: List<Plan> = emptyList(),
         val isLoading: Boolean = false,
         val errorMessage: String? = null,
+        val invitesError: String? = null,
+        val respondError: String? = null,
         val selectedInvite: Plan? = null
     )
 
@@ -31,21 +33,22 @@ class MyPlansViewModel(
 
     fun loadPlans() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, invitesError = null, respondError = null) }
 
             repository.getMyPlans()
-                .onSuccess { plans ->
-                    _uiState.update { current ->
-                        current.copy(
-                            isLoading = false,
-                            allPlans = plans,
-                            filteredPlans = plansForTab(plans, current.selectedTab)
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
-                }
+                .onSuccess { plans -> _uiState.update { it.copy(allPlans = plans) } }
+                .onFailure { error -> _uiState.update { it.copy(errorMessage = error.message) } }
+
+            repository.getMyInvites()
+                .onSuccess { invites -> _uiState.update { it.copy(invites = invites) } }
+                .onFailure { error -> _uiState.update { it.copy(invitesError = error.message) } }
+
+            _uiState.update { current ->
+                current.copy(
+                    isLoading = false,
+                    filteredPlans = plansForTab(current.allPlans + current.invites, current.selectedTab)
+                )
+            }
         }
     }
 
@@ -53,7 +56,8 @@ class MyPlansViewModel(
         _uiState.update { current ->
             current.copy(
                 selectedTab = tab,
-                filteredPlans = plansForTab(current.allPlans, tab)
+                respondError = null,
+                filteredPlans = plansForTab(current.allPlans + current.invites, tab)
             )
         }
     }
@@ -67,62 +71,24 @@ class MyPlansViewModel(
     }
 
     fun onInviteGoing() {
-        val invite = _uiState.value.selectedInvite
-        if (invite == null) {
-            return
-        }
-
-        viewModelScope.launch {
-            repository.respondToInvite(invite.id, InviteResponse.GOING)
-                .onSuccess {
-                    val updatedPlans = mutableListOf<Plan>()
-                    for (plan in _uiState.value.allPlans) {
-                        if (plan.id == invite.id) {
-                            updatedPlans.add(plan.copy(status = PlanStatus.CONFIRMED))
-                        } else {
-                            updatedPlans.add(plan)
-                        }
-                    }
-                    _uiState.update { current ->
-                        current.copy(
-                            allPlans = updatedPlans,
-                            filteredPlans = plansForTab(updatedPlans, current.selectedTab),
-                            selectedInvite = null
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    _uiState.update { it.copy(errorMessage = error.message, selectedInvite = null) }
-                }
-        }
+        respondToInvite(InviteResponse.GOING)
     }
 
     fun onInviteCantMake() {
+        respondToInvite(InviteResponse.CANT_MAKE)
+    }
+
+    private fun respondToInvite(response: InviteResponse) {
         val invite = _uiState.value.selectedInvite
         if (invite == null) {
             return
         }
+        _uiState.update { it.copy(selectedInvite = null) }
 
         viewModelScope.launch {
-            repository.respondToInvite(invite.id, InviteResponse.CANT_MAKE)
-                .onSuccess {
-                    val remainingPlans = mutableListOf<Plan>()
-                    for (plan in _uiState.value.allPlans) {
-                        if (plan.id != invite.id) {
-                            remainingPlans.add(plan)
-                        }
-                    }
-                    _uiState.update { current ->
-                        current.copy(
-                            allPlans = remainingPlans,
-                            filteredPlans = plansForTab(remainingPlans, current.selectedTab),
-                            selectedInvite = null
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    _uiState.update { it.copy(errorMessage = error.message, selectedInvite = null) }
-                }
+            repository.respondToInvite(invite.id, response)
+                .onSuccess { loadPlans() }
+                .onFailure { error -> _uiState.update { it.copy(respondError = error.message) } }
         }
     }
 
