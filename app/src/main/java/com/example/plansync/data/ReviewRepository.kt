@@ -1,16 +1,17 @@
 package com.example.plansync.data
 
+import com.google.firebase.firestore.FirebaseFirestore
 import com.example.plansync.model.Review
-import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.firestore
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-class ReviewRepository {
+class ReviewRepository(
+    private val db: FirebaseFirestore = FirebaseProvider.firestore,
+    private val auth: FirebaseAuth = FirebaseProvider.auth
+) {
 
-    private val auth = FirebaseAuth.getInstance()
-    private val plans = Firebase.firestore.collection("plans")
+    private val plans = db.collection("plans")
 
     suspend fun saveReview(planId: String, rating: Int, comment: String): Result<Unit> {
         val uid = auth.currentUser?.uid
