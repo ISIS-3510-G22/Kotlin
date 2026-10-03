@@ -9,6 +9,7 @@ import com.example.plansync.model.PlanStatus
 import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.firestore
 import com.google.firebase.firestore.FieldValue
 import java.text.SimpleDateFormat
@@ -55,62 +56,60 @@ class PlanRepository {
     }
 
     suspend fun getPlan(planId: String): Result<Plan> {
-        delay(800)
+        val planDoc = suspendCancellableCoroutine<DocumentSnapshot?> { cont ->
+            Firebase.firestore.collection("plans").document(planId).get()
+                .addOnSuccessListener { cont.resume(it) }
+                .addOnFailureListener { cont.resume(null) }
+        } ?: return Result.failure(Exception("Plan not found."))
 
-        if (planId.startsWith("error")) {
-            return Result.failure(Exception("Plan not found."))
+        if (!planDoc.exists()) return Result.failure(Exception("Plan not found."))
+
+        val activityIds = (planDoc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>()
+        val activities = mutableListOf<Activity>()
+        for (actId in activityIds) {
+            fetchActivity(actId)?.let { activities.add(it) }
         }
 
+        val tags = (planDoc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
         return Result.success(
             Plan(
-                id = planId,
-                title = "Saturday in Brooklyn",
-                date = "Oct 28, 2023",
-                estimatedCostPerPerson = 85,
-                participants = listOf(
-                    Participant(id = "u1", initials = "JD", avatarColorIndex = 0),
-                    Participant(id = "u2", initials = "SA", avatarColorIndex = 1),
-                    Participant(id = "u3", initials = "MK", avatarColorIndex = 2),
-                    Participant(id = "u4", initials = "BL", avatarColorIndex = 3)
-                ),
+                id = planDoc.id,
+                title = planDoc.getString("name").orEmpty(),
+                date = planDoc.getTimestamp("date")
+                    ?.let { SimpleDateFormat("MMM d, yyyy", Locale.US).format(it.toDate()) }
+                    .orEmpty(),
+                estimatedCostPerPerson = activities.sumOf { it.price },
+                participants = (planDoc.get("participantsIds") as? List<*>).orEmpty()
+                    .filterIsInstance<String>()
+                    .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i % 5) },
+                activities = activities,
                 status = PlanStatus.CONFIRMED,
-                activities = listOf(
-                    Activity(
-                        id = "a1",
-                        name = "Devoción",
-                        category = "Coffee",
-                        description = "Grab morning coffee in Williamsburg. Known for their lush interior and fresh Colombian beans.",
-                        address = "69 Grand St, Brooklyn",
-                        iconType = ActivityIcon.COFFEE
-                    ),
-                    Activity(
-                        id = "a2",
-                        name = "Domino Park",
-                        category = "Outdoors",
-                        description = "Walk along the waterfront. Great views of the Manhattan skyline and the Williamsburg Bridge.",
-                        address = "15 River St, Brooklyn",
-                        iconType = ActivityIcon.OUTDOORS
-                    ),
-                    Activity(
-                        id = "a3",
-                        name = "Juliana's Pizza",
-                        category = "Food",
-                        description = "Legendary coal-fired pizza under the Brooklyn Bridge. Arrive early to beat the line.",
-                        address = "19 Old Fulton St, Brooklyn",
-                        iconType = ActivityIcon.FOOD
-                    ),
-                    Activity(
-                        id = "a4",
-                        name = "Brooklyn Bowl",
-                        category = "Music",
-                        description = "End the night with live music and bowling in a legendary Williamsburg venue.",
-                        address = "61 Wythe Ave, Brooklyn",
-                        iconType = ActivityIcon.MUSIC
-                    )
-                )
+                activityIds = activityIds,
+                category = tags.firstOrNull().orEmpty()
             )
         )
     }
+
+    private suspend fun fetchActivity(activityId: String): Activity? =
+        suspendCancellableCoroutine { continuation ->
+            Firebase.firestore.collection("activities").document(activityId).get()
+                .addOnSuccessListener { doc ->
+                    if (!doc.exists()) { continuation.resume(null); return@addOnSuccessListener }
+                    val tags = (doc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
+                    continuation.resume(
+                        Activity(
+                            id = doc.id,
+                            name = doc.getString("name").orEmpty(),
+                            category = tags.firstOrNull().orEmpty(),
+                            description = doc.getString("notes").orEmpty(),
+                            address = doc.getString("address").orEmpty(),
+                            iconType = ActivityIcon.DEFAULT,
+                            price = (doc.getDouble("expectedPrice") ?: 0.0).toInt()
+                        )
+                    )
+                }
+                .addOnFailureListener { continuation.resume(null) }
+        }
 
     suspend fun getPlans(): Result<List<Plan>> {
         delay(800)
