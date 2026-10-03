@@ -21,6 +21,7 @@ import com.example.plansync.ui.LoginScreen
 import com.example.plansync.ui.SignUpScreen
 import com.example.plansync.ui.navigation.MainNavHost
 import com.example.plansync.ui.theme.PlanSyncTheme
+import com.google.firebase.auth.FirebaseAuth
 
 /**
  * UI layer — single Activity, entry point of the application.
@@ -41,7 +42,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             PlanSyncTheme {
 
-                var isLoggedIn by remember { mutableStateOf(false) }
+                var isLoggedIn by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser != null) }
                 var isSigningUp by remember { mutableStateOf(false) }
 
                 when {

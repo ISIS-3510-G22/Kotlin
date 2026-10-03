@@ -1,5 +1,10 @@
 package com.example.plansync.ui
 
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,6 +26,7 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,6 +39,7 @@ import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.MyPlansViewModel
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.sqrt
 
 @Composable
 fun MyPlansScreen(
@@ -50,6 +57,32 @@ fun MyPlansScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loadPlans()
+    }
+
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        var lastShakeTime = 0L
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+                val force = sqrt(x * x + y * y + z * z) / SensorManager.GRAVITY_EARTH
+                val now = System.currentTimeMillis()
+                if (force > 2.5f && now - lastShakeTime > 2000) {
+                    lastShakeTime = now
+                    viewModel.loadPlans()
+                }
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+        if (accelerometer != null) {
+            sensorManager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_UI)
+        }
+        onDispose { sensorManager.unregisterListener(listener) }
     }
 
     Scaffold(
