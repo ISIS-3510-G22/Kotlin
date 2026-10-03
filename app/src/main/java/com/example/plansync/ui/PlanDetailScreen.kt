@@ -1,5 +1,7 @@
 package com.example.plansync.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -80,7 +83,8 @@ fun PlanDetailScreen(
     planId: String = "plan-001",
     viewModel: PlanDetailViewModel = viewModel(),
     onBack: () -> Unit = {},
-    onInvite: (String) -> Unit = {}
+    onInvite: (String) -> Unit = {},
+    onAddActivity: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -117,7 +121,8 @@ fun PlanDetailScreen(
                 PlanDetailContent(
                     plan = uiState.plan!!,
                     onInvite = { onInvite(planId) },
-                    onRsvp = { viewModel.onRsvpTriggered() }
+                    onRsvp = { viewModel.onRsvpTriggered() },
+                    onAddActivity = onAddActivity
                 )
             }
         }
@@ -167,11 +172,11 @@ private fun PlanDetailTopBar(onBack: () -> Unit) {
 // ── Scrollable plan content ────────────────────────────────────────────────────
 
 @Composable
-private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () -> Unit = {}) {
+private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () -> Unit = {}, onAddActivity: () -> Unit = {}) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
 
         // Header: title, date, cost, activity count, action buttons
-        item { PlanHeader(plan = plan, onRsvp = onRsvp) }
+        item { PlanHeader(plan = plan, onRsvp = onRsvp, onAddActivity = onAddActivity) }
 
         item { HorizontalDivider(color = Color(0xFFDDDDDD), thickness = 1.dp) }
 
@@ -193,7 +198,8 @@ private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () 
 // ── Plan header ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}) {
+private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () -> Unit = {}) {
+    val context = LocalContext.current
     // Context-aware: check if plan date matches today's date using device clock.
     val isToday = remember(plan.date) {
         val today = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
@@ -291,13 +297,17 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}) {
                 icon = Icons.Default.Map,
                 label = "View\nMap",
                 modifier = Modifier.weight(1f),
-                onClick = { /* TODO: open map */ }
+                onClick = {
+                    val address = plan.activities.firstOrNull()?.address ?: plan.title
+                    val uri = Uri.parse("geo:0,0?q=${Uri.encode(address)}")
+                    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                }
             )
             ActionButton(
                 icon = Icons.Default.Add,
                 label = "Add\nActivity",
                 modifier = Modifier.weight(1f),
-                onClick = { /* TODO: add activity */ }
+                onClick = onAddActivity
             )
             ActionButton(
                 icon = Icons.Default.CheckCircle,
