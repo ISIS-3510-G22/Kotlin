@@ -14,14 +14,15 @@ data class Plan(
     val category: String = "",
     val planType: String = "",
     val activityIds: List<String> = emptyList(),
-    val dateTime: Date? = null
+    val dateTime: Date? = null,
+    val tags: List<String> = emptyList()
 ) {
-    val activityCount: Int get() = activities.size
+    val activityCount: Int get() = maxOf(activities.size, activityIds.size)
 
     val priceTier: String get() = when {
         estimatedCostPerPerson <= 0 -> "Free"
-        estimatedCostPerPerson <= 30 -> "$"
-        estimatedCostPerPerson <= 80 -> "$$"
+        estimatedCostPerPerson <= 30_000 -> "$"
+        estimatedCostPerPerson <= 80_000 -> "$$"
         else -> "$$$"
     }
 }
