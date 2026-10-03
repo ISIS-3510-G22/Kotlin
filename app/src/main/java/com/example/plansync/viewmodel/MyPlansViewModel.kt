@@ -31,6 +31,8 @@ class MyPlansViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    private var initialTabChosen = false
+
     fun loadPlans() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null, invitesError = null, respondError = null) }
@@ -43,6 +45,13 @@ class MyPlansViewModel(
                 .onSuccess { invites -> _uiState.update { it.copy(invites = invites) } }
                 .onFailure { error -> _uiState.update { it.copy(invitesError = error.message) } }
 
+            if (!initialTabChosen) {
+                initialTabChosen = true
+                if (_uiState.value.invites.isNotEmpty()) {
+                    _uiState.update { it.copy(selectedTab = PlanStatus.PENDING_INVITE) }
+                }
+            }
+
             _uiState.update { current ->
                 current.copy(
                     isLoading = false,
@@ -53,6 +62,7 @@ class MyPlansViewModel(
     }
 
     fun selectTab(tab: PlanStatus) {
+        initialTabChosen = true
         _uiState.update { current ->
             current.copy(
                 selectedTab = tab,
