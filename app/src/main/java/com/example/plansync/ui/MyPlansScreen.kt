@@ -117,6 +117,15 @@ fun MyPlansScreen(
                 )
             }
 
+            if (uiState.selectedTab == PlanStatus.PAST && uiState.bestTag != null) {
+                Text(
+                    text = "Best rated plan type: ${uiState.bestTag} · ${String.format(Locale.US, "%.1f", uiState.bestAverage)} ★ (${reviewCountLabel(uiState.bestReviewCount)})",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF888888),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
             val listError = if (uiState.selectedTab == PlanStatus.PENDING_INVITE) {
                 uiState.invitesError
             } else {
@@ -149,6 +158,7 @@ fun MyPlansScreen(
                         items(uiState.filteredPlans) { plan ->
                             PlanCard(
                                 plan = plan,
+                                rainChance = rainChanceFor(plan, uiState.rainForecast),
                                 onClick = {
                                     if (plan.status == PlanStatus.PENDING_INVITE) {
                                         viewModel.onInviteTapped(plan)
@@ -286,6 +296,7 @@ private fun EmptyPlansMessage(tab: PlanStatus) {
 @Composable
 private fun PlanCard(
     plan: Plan,
+    rainChance: Int? = null,
     onClick: () -> Unit = {},
     onLeaveReview: () -> Unit = {},
     onManageSplits: () -> Unit = {},
@@ -324,8 +335,9 @@ private fun PlanCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(4.dp))
+                    val dateText = if (rainChance != null) "${planDateText(plan)} · $rainChance% rain" else planDateText(plan)
                     Text(
-                        text = "${planDateText(plan)} • ${participantCountLabel(plan.participants)}",
+                        text = "$dateText • ${participantCountLabel(plan.participants)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF888888)
                     )
@@ -383,6 +395,14 @@ private fun planDateText(plan: Plan): String {
     val pattern = if (plan.status == PlanStatus.PAST) "MMM d · h:mm a" else "MMM d"
     return SimpleDateFormat(pattern, Locale.US).format(dateTime)
 }
+
+private fun rainChanceFor(plan: Plan, forecast: Map<String, Int>): Int? {
+    if (plan.status != PlanStatus.CONFIRMED) return null
+    val dateTime = plan.dateTime ?: return null
+    return forecast[SimpleDateFormat("yyyy-MM-dd", Locale.US).format(dateTime)]
+}
+
+private fun reviewCountLabel(count: Int): String = if (count == 1) "1 review" else "$count reviews"
 
 private fun participantCountLabel(participants: List<Participant>): String {
     return if (participants.size <= 1) "Solo Trip" else "${participants.size} People"

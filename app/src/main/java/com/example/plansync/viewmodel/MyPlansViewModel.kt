@@ -3,6 +3,8 @@ package com.example.plansync.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.PlanRepository
+import com.example.plansync.data.ReviewRepository
+import com.example.plansync.data.WeatherRepository
 import com.example.plansync.model.InviteResponse
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
@@ -13,7 +15,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class MyPlansViewModel(
-    private val repository: PlanRepository = PlanRepository()
+    private val repository: PlanRepository = PlanRepository(),
+    private val weatherRepository: WeatherRepository = WeatherRepository(),
+    private val reviewRepository: ReviewRepository = ReviewRepository()
 ) : ViewModel() {
 
     data class UiState(
@@ -25,7 +29,11 @@ class MyPlansViewModel(
         val errorMessage: String? = null,
         val invitesError: String? = null,
         val respondError: String? = null,
-        val selectedInvite: Plan? = null
+        val selectedInvite: Plan? = null,
+        val rainForecast: Map<String, Int> = emptyMap(),
+        val bestTag: String? = null,
+        val bestAverage: Double = 0.0,
+        val bestReviewCount: Int = 0
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -34,6 +42,8 @@ class MyPlansViewModel(
     private var initialTabChosen = false
 
     fun loadPlans() {
+        loadRainForecast()
+        loadBestRatedTag()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null, invitesError = null, respondError = null) }
 
@@ -58,6 +68,33 @@ class MyPlansViewModel(
                     filteredPlans = plansForTab(current.allPlans + current.invites, current.selectedTab)
                 )
             }
+        }
+    }
+
+    private fun loadRainForecast() {
+        viewModelScope.launch {
+            weatherRepository.getRainForecast()
+                .onSuccess { forecast -> _uiState.update { it.copy(rainForecast = forecast) } }
+        }
+    }
+
+    private fun loadBestRatedTag() {
+        viewModelScope.launch {
+            reviewRepository.getRatingsByTag()
+                .onSuccess { ratingsByTag ->
+                    var bestTag: String? = null
+                    var bestAverage = 0.0
+                    var bestCount = 0
+                    for ((tag, ratings) in ratingsByTag) {
+                        val average = ratings.average()
+                        if (bestTag == null || average > bestAverage || (average == bestAverage && ratings.size > bestCount)) {
+                            bestTag = tag
+                            bestAverage = average
+                            bestCount = ratings.size
+                        }
+                    }
+                    _uiState.update { it.copy(bestTag = bestTag, bestAverage = bestAverage, bestReviewCount = bestCount) }
+                }
         }
     }
 
