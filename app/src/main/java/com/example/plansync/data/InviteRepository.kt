@@ -35,11 +35,7 @@ class InviteRepository {
                             name = name,
                             handle = if (email.isNotBlank()) "@${email.substringBefore("@")}" else null,
                             isGroup = false,
-                            isInvited = false,
-                            initials = name.split(" ")
-                                .mapNotNull { it.firstOrNull()?.uppercaseChar() }
-                                .take(2)
-                                .joinToString("")
+                            isInvited = false
                         )
                     }
                     continuation.resume(contacts)
