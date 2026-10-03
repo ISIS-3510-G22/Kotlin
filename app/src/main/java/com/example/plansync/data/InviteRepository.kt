@@ -1,39 +1,57 @@
 package com.example.plansync.data
 
 import com.example.plansync.model.Contact
-import kotlinx.coroutines.delay
+import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.firestore
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
  * Data layer — Repository pattern.
  * Single source of truth for invite-related operations.
- *
- * TODO: Replace stub with real Firestore/backend calls once the
- *       social graph data model is set up. No remote dependencies added yet.
  */
 class InviteRepository {
 
+    private val auth = FirebaseAuth.getInstance()
+    private val db = Firebase.firestore
+
     /**
-     * Returns a list of suggested friends and groups for the current user.
-     * Stubbed with hardcoded data matching the Figma mockup.
+     * Returns the current user's friends from Firestore as suggested contacts.
      */
     suspend fun getSuggestedContacts(): List<Contact> {
-        delay(500) // simulate network latency
-        return listOf(
-            Contact(id = "u1", name = "Sarah Jenkins", handle = "@sarahj",  isGroup = false, isInvited = true),
-            Contact(id = "u2", name = "Marcus Koh",    handle = "@marcusk", isGroup = false, isInvited = false),
-            Contact(id = "u3", name = "John Doe",      handle = "@johnd",   isGroup = false, isInvited = false),
-            Contact(id = "u4", name = "Billy Low",     handle = "@billyl",  isGroup = false, isInvited = true),
-            Contact(id = "u5", name = "Diana Prince",  handle = "@diana",   isGroup = false, isInvited = false),
-            Contact(id = "g1", name = "College Reunion", handle = null,     isGroup = true,  isInvited = false)
-        )
+        val uid = auth.currentUser?.uid ?: return emptyList()
+        return suspendCancellableCoroutine { continuation ->
+            db.collection("users").document(uid).collection("friends")
+                .get()
+                .addOnSuccessListener { snapshot ->
+                    val contacts = snapshot.documents.map { doc ->
+                        val name = doc.getString("name").orEmpty()
+                        val email = doc.getString("email").orEmpty()
+                        Contact(
+                            id = doc.id,
+                            name = name,
+                            handle = if (email.isNotBlank()) "@${email.substringBefore("@")}" else null,
+                            isGroup = false,
+                            isInvited = false
+                        )
+                    }
+                    continuation.resume(contacts)
+                }
+                .addOnFailureListener { continuation.resume(emptyList()) }
+        }
     }
 
     /**
-     * Marks a contact as invited for the given [planId].
-     * Stub — always succeeds after a short delay.
+     * Adds the contactId to the plan's invitations array in Firestore.
      */
-    suspend fun inviteContact(planId: String, contactId: String): Result<Unit> {
-        delay(300)
-        return Result.success(Unit)
-    }
+    suspend fun inviteContact(planId: String, contactId: String): Result<Unit> =
+        suspendCancellableCoroutine { continuation ->
+            db.collection("plans").document(planId)
+                .set(mapOf("invitations" to FieldValue.arrayUnion(contactId)), SetOptions.merge())
+                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
+                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }
 }

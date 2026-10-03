@@ -198,7 +198,8 @@ fun MainNavHost(
             PlanDetailScreen(
                 planId = planId,
                 onBack = { navController.popBackStack() },
-                onInvite = { id -> navController.navigate(Routes.invite(id)) }
+                onInvite = { id -> navController.navigate(Routes.invite(id)) },
+                onAddActivity = { navController.navigate(Routes.ACTIVITIES) }
             )
         }
 
