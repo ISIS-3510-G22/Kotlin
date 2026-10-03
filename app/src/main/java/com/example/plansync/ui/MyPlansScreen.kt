@@ -42,7 +42,8 @@ fun MyPlansScreen(
     onMyActivitiesSelected: () -> Unit = {},
     onMyCrewSelected: () -> Unit = {},
     onPlanSelected: (String) -> Unit = {},
-    onCreatePlan: () -> Unit = {}
+    onCreatePlan: () -> Unit = {},
+    onLeaveReview: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -106,6 +107,7 @@ fun MyPlansScreen(
                                         onPlanSelected(plan.id)
                                     }
                                 },
+                                onLeaveReview = { onLeaveReview(plan.id) },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
@@ -242,7 +244,12 @@ private fun EmptyPlansMessage(tab: PlanStatus) {
 }
 
 @Composable
-private fun PlanCard(plan: Plan, onClick: () -> Unit = {}, modifier: Modifier = Modifier) {
+private fun PlanCard(
+    plan: Plan,
+    onClick: () -> Unit = {},
+    onLeaveReview: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
@@ -312,7 +319,7 @@ private fun PlanCard(plan: Plan, onClick: () -> Unit = {}, modifier: Modifier = 
                         Text(text = "Manage Split", fontWeight = FontWeight.Bold)
                     }
                     OutlinedButton(
-                        onClick = { },
+                        onClick = onLeaveReview,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {

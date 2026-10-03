@@ -40,6 +40,7 @@ import com.example.plansync.ui.GroupDetailScreen
 import com.example.plansync.ui.GroupInvitesScreen
 import com.example.plansync.ui.InviteToGroupScreen
 import com.example.plansync.ui.InviteScreen
+import com.example.plansync.ui.LeaveReviewScreen
 import com.example.plansync.ui.MyActivitiesScreen
 import com.example.plansync.ui.MyCrewScreen
 import com.example.plansync.ui.MyPlansScreen
@@ -73,6 +74,7 @@ object Routes {
     const val GROUP_INVITES = "group_invites"
     const val INVITE_TO_GROUP = "invite_to_group/{groupId}"
     const val USER_DETAIL = "user_detail/{userId}"
+    const val LEAVE_REVIEW = "leave_review/{planId}"
 
     fun planDetail(planId: String) = "plan_detail/$planId"
     fun invite(planId: String)     = "invite/$planId"
@@ -82,6 +84,7 @@ object Routes {
     fun groupDetail(groupId: String) = "group_detail/$groupId"
     fun inviteToGroup(groupId: String) = "invite_to_group/$groupId"
     fun userDetail(userId: String) = "user_detail/$userId"
+    fun leaveReview(planId: String) = "leave_review/$planId"
 }
 
 
@@ -172,7 +175,18 @@ fun MainNavHost(
                 onMyActivitiesSelected = { navController.navigate(Routes.ACTIVITIES) },
                 onMyCrewSelected = { navController.navigate(Routes.GROUPS) },
                 onPlanSelected = { planId -> navController.navigate(Routes.planDetail(planId)) },
-                onCreatePlan = { navController.navigate(Routes.CREATE_PLAN) }
+                onCreatePlan = { navController.navigate(Routes.CREATE_PLAN) },
+                onLeaveReview = { planId -> navController.navigate(Routes.leaveReview(planId)) }
+            )
+        }
+
+        composable(
+            route = Routes.LEAVE_REVIEW,
+            arguments = listOf(navArgument("planId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            LeaveReviewScreen(
+                planId = backStackEntry.arguments?.getString("planId").orEmpty(),
+                onBack = { navController.popBackStack() }
             )
         }
 
