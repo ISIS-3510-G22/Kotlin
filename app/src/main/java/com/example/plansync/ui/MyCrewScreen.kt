@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.plansync.model.Friend
 import com.example.plansync.model.Group
+import com.example.plansync.model.User
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.CrewTab
 import com.example.plansync.viewmodel.MyCrewViewModel
@@ -34,7 +35,13 @@ fun MyCrewScreen(
     onExploreSelected: () -> Unit = {},
     onMyPlansSelected: () -> Unit = {},
     onMyActivitiesSelected: () -> Unit = {},
-    onProfileSelected: () -> Unit = {}
+    onProfileSelected: () -> Unit = {},
+    onCreateGroup: () -> Unit = {},
+    onGroupSelected: (String) -> Unit = {},
+    onAddFriend: () -> Unit = {},
+    onFriendRequests: () -> Unit = {},
+    onGroupInvites: () -> Unit = {},
+    onFriendSelected: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -72,61 +79,96 @@ fun MyCrewScreen(
                             CircularProgressIndicator(color = Coral)
                         }
                     }
-                    uiState.errorMessage != null -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = uiState.errorMessage!!,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                    }
                     uiState.selectedTab == CrewTab.GROUPS -> {
-                        if (uiState.groups.isEmpty()) {
-                            EmptyCrewMessage(message = "No groups yet.")
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(vertical = 8.dp)
-                            ) {
-                                items(uiState.groups) { group ->
-                                    GroupCard(
-                                        group = group,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                    )
-                                }
-                            }
-                        }
+                        GroupsContent(
+                            groups = uiState.groups,
+                            groupMembers = uiState.groupMembers,
+                            errorMessage = uiState.groupsError,
+                            onGroupSelected = onGroupSelected
+                        )
                     }
                     else -> {
-                        if (uiState.friends.isEmpty()) {
-                            EmptyCrewMessage(message = "No friends added.")
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(vertical = 8.dp)
-                            ) {
-                                items(uiState.friends) { friend ->
-                                    FriendCard(
-                                        friend = friend,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                    )
-                                }
-                            }
-                        }
+                        FriendsContent(
+                            friends = uiState.friends,
+                            errorMessage = uiState.friendsError,
+                            onFriendSelected = onFriendSelected
+                        )
                     }
                 }
             }
 
-            CrewActionButton(
-                label = if (uiState.selectedTab == CrewTab.GROUPS) "New Invitations (1)" else "Add Friend",
-                onClick = { }
-            )
+            if (uiState.selectedTab == CrewTab.GROUPS) {
+                CountErrorLine(message = uiState.groupInvitesCountError)
+                CrewActionButton(label = "Create Group", onClick = onCreateGroup)
+                CrewActionButton(
+                    label = "New Group Invites (${uiState.groupInvitesCount})",
+                    onClick = onGroupInvites
+                )
+            } else {
+                CountErrorLine(message = uiState.friendRequestsCountError)
+                CrewActionButton(label = "Add Friend", onClick = onAddFriend)
+                CrewActionButton(
+                    label = "New Friend Requests (${uiState.friendRequestsCount})",
+                    onClick = onFriendRequests
+                )
+            }
         }
     }
 }
 
-// Top
+@Composable
+private fun GroupsContent(
+    groups: List<Group>,
+    groupMembers: Map<String, User>,
+    errorMessage: String?,
+    onGroupSelected: (String) -> Unit
+) {
+    when {
+        errorMessage != null -> CrewErrorMessage(message = errorMessage)
+        groups.isEmpty() -> EmptyCrewMessage(message = "No groups yet.")
+        else -> {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(groups) { group ->
+                    GroupCard(
+                        group = group,
+                        groupMembers = groupMembers,
+                        onClick = { onGroupSelected(group.id) },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FriendsContent(
+    friends: List<Friend>,
+    errorMessage: String?,
+    onFriendSelected: (String) -> Unit
+) {
+    when {
+        errorMessage != null -> CrewErrorMessage(message = errorMessage)
+        friends.isEmpty() -> EmptyCrewMessage(message = "No friends added.")
+        else -> {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(friends) { friend ->
+                    FriendCard(
+                        friend = friend,
+                        onClick = { onFriendSelected(friend.id) },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun MyCrewTopBar() {
@@ -143,8 +185,6 @@ private fun MyCrewTopBar() {
         )
     }
 }
-
-// Tabs
 
 @Composable
 private fun MyCrewTabRow(selectedTab: CrewTab, onTabSelected: (CrewTab) -> Unit) {
@@ -199,20 +239,17 @@ private fun CrewTabPill(
     }
 }
 
-// Empty state
-
 @Composable
-private fun EmptyCrewMessage(message: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+private fun CountErrorLine(message: String?) {
+    if (message != null) {
         Text(
             text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF888888)
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
     }
 }
-
-// Action button
 
 @Composable
 private fun CrewActionButton(label: String, onClick: () -> Unit) {
@@ -228,18 +265,22 @@ private fun CrewActionButton(label: String, onClick: () -> Unit) {
     }
 }
 
-// Groups
-
 @Composable
-private fun GroupCard(group: Group, modifier: Modifier = Modifier) {
+private fun GroupCard(
+    group: Group,
+    groupMembers: Map<String, User>,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Card(
+        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            GroupAvatarCluster(memberCount = group.memberCount)
+            GroupAvatarCluster(memberIds = group.memberIds, groupMembers = groupMembers)
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = group.name,
@@ -248,7 +289,7 @@ private fun GroupCard(group: Group, modifier: Modifier = Modifier) {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "${group.memberCount} Members",
+                text = "${group.memberIds.size} Members",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFF888888)
             )
@@ -256,11 +297,10 @@ private fun GroupCard(group: Group, modifier: Modifier = Modifier) {
     }
 }
 
-// Friends
-
 @Composable
-private fun FriendCard(friend: Friend, modifier: Modifier = Modifier) {
+private fun FriendCard(friend: Friend, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Card(
+        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -270,7 +310,13 @@ private fun FriendCard(friend: Friend, modifier: Modifier = Modifier) {
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FriendAvatar(friend = friend)
+            CrewAvatar(
+                name = friend.name,
+                lastName = "",
+                colorIndex = friend.avatarColorIndex,
+                size = 44.dp,
+                photoUrl = friend.photoUrl
+            )
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
@@ -288,93 +334,6 @@ private fun FriendCard(friend: Friend, modifier: Modifier = Modifier) {
         }
     }
 }
-
-@Composable
-private fun FriendAvatar(friend: Friend) {
-    val backgroundColor = crewAvatarColors.getOrElse(friend.avatarColorIndex) { Coral }
-
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(backgroundColor),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = friend.initials,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF444444)
-        )
-    }
-}
-
-// Avatars
-
-private val crewAvatarColors = listOf(
-    Color(0xFFF3B9A0),
-    Color(0xFFCBB8E8),
-    Color(0xFFAEB9D9),
-    Color(0xFFF6DCC0),
-    Color(0xFFA8DCC9)
-)
-
-private const val MAX_AVATARS_SHOWN = 3
-
-@Composable
-private fun GroupAvatarCluster(memberCount: Int) {
-    val shownCount = minOf(memberCount, MAX_AVATARS_SHOWN)
-    val overflowCount = memberCount - shownCount
-
-    Row(horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
-        repeat(shownCount) { index ->
-            GroupMemberAvatar(colorIndex = index)
-        }
-        if (overflowCount > 0) {
-            OverflowCircle(count = overflowCount)
-        }
-    }
-}
-
-@Composable
-private fun GroupMemberAvatar(colorIndex: Int) {
-    Box(
-        modifier = Modifier
-            .size(32.dp)
-            .clip(CircleShape)
-            .background(crewAvatarColors.getOrElse(colorIndex) { Coral })
-            .border(2.dp, Color.White, CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.Person,
-            contentDescription = null,
-            tint = Color(0xFF555555),
-            modifier = Modifier.size(18.dp)
-        )
-    }
-}
-
-@Composable
-private fun OverflowCircle(count: Int) {
-    Box(
-        modifier = Modifier
-            .size(32.dp)
-            .clip(CircleShape)
-            .background(Color(0xFFE0E0E0))
-            .border(2.dp, Color.White, CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "+$count",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF666666)
-        )
-    }
-}
-
-// NavBar
 
 private data class MyCrewNavItem(
     val label: String,
