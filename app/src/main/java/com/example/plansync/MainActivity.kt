@@ -1,47 +1,82 @@
 package com.example.plansync
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.compose.rememberNavController
+import com.example.plansync.ui.LoginScreen
+import com.example.plansync.ui.SignUpScreen
+import com.example.plansync.ui.navigation.MainNavHost
 import com.example.plansync.ui.theme.PlanSyncTheme
+import com.google.firebase.auth.FirebaseAuth
 
+/**
+ * UI layer — single Activity, entry point of the application.
+ *
+ * Controls three phases:
+ *  1. Pre-login: shows LoginScreen (no bottom nav, no NavHost)
+ *  2. Sign-up: shows SignUpScreen (accessible from LoginScreen)
+ *  3. Post-login: shows MainNavHost inside a Scaffold with BottomNavBar
+ *
+ * Jetpack Navigation (NavHostController) manages all post-login routing.
+ * The Activity holds no ViewModel — each screen owns its own via viewModel().
+ */
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             PlanSyncTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
+
+                var isLoggedIn by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser != null) }
+                var isSigningUp by remember { mutableStateOf(false) }
+
+                when {
+                    isSigningUp -> SignUpScreen(
+                        onProfileCreated = { isLoggedIn = true; isSigningUp = false },
+                        onCancel = { isSigningUp = false }
                     )
+                    !isLoggedIn -> LoginScreen(
+                        onLoginSuccess = { isLoggedIn = true },
+                        onSignUpClick = { isSigningUp = true }
+                    )
+                    else -> {
+                        // Phase 3 — Main app with Jetpack Navigation.
+                        // Bottom nav is handled inside each screen by teammates' implementation.
+                        // NavHost manages routing between all destinations.
+                        val navController = rememberNavController()
+                        val notificationPermission = rememberLauncherForActivityResult(
+                            ActivityResultContracts.RequestPermission()
+                        ) {}
+                        LaunchedEffect(Unit) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }
+                        Scaffold { innerPadding ->
+                            MainNavHost(
+                                navController = navController,
+                                onLoggedOut = { isLoggedIn = false },
+                                modifier = Modifier.padding(innerPadding)
+                            )
+                        }
+                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    PlanSyncTheme {
-        Greeting("Android")
     }
 }
