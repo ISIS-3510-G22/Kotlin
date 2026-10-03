@@ -1,19 +1,20 @@
 package com.example.plansync.data
 
+import com.google.firebase.firestore.FirebaseFirestore
 import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
-import com.google.firebase.Firebase
 import com.google.firebase.firestore.FieldPath
-import com.google.firebase.firestore.firestore
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.tasks.await
 
-class ExploreRepository {
+class ExploreRepository(
+    private val db: FirebaseFirestore = FirebaseProvider.firestore
+) {
 
     suspend fun getPlans(): Result<List<Plan>> = runCatching {
-        val docs = Firebase.firestore.collection("plans")
+        val docs = db.collection("plans")
             .whereEqualTo("isPublic", true)
             .get()
             .await()
@@ -49,7 +50,7 @@ class ExploreRepository {
     private suspend fun activityPrices(ids: List<String>): Map<String, Int> =
         ids.chunked(30).flatMap { chunk ->
             runCatching {
-                Firebase.firestore.collection("activities")
+                db.collection("activities")
                     .whereIn(FieldPath.documentId(), chunk)
                     .get()
                     .await()

@@ -1,11 +1,10 @@
 package com.example.plansync.data
 
+import com.google.firebase.firestore.FirebaseFirestore
 import com.example.plansync.model.Contact
-import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.firestore.firestore
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -13,10 +12,11 @@ import kotlinx.coroutines.suspendCancellableCoroutine
  * Data layer — Repository pattern.
  * Single source of truth for invite-related operations.
  */
-class InviteRepository {
+class InviteRepository(
+    private val db: FirebaseFirestore = FirebaseProvider.firestore,
+    private val auth: FirebaseAuth = FirebaseProvider.auth
+) {
 
-    private val auth = FirebaseAuth.getInstance()
-    private val db = Firebase.firestore
 
     /**
      * Returns the current user's friends from Firestore as suggested contacts.

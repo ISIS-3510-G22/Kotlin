@@ -1,16 +1,15 @@
 package com.example.plansync.data
 
+import com.google.firebase.firestore.FirebaseFirestore
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.InviteResponse
 import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
-import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.firestore
 import com.google.firebase.firestore.FieldValue
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -19,9 +18,11 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-class PlanRepository {
+class PlanRepository(
+    private val db: FirebaseFirestore = FirebaseProvider.firestore,
+    private val auth: FirebaseAuth = FirebaseProvider.auth
+) {
 
-    private val auth = FirebaseAuth.getInstance()
 
     /**
      * Data layer — creates a new plan document in Firestore.
@@ -49,7 +50,7 @@ class PlanRepository {
                 "tags"             to tags,
                 "invitations"      to emptyList<String>()
             )
-            Firebase.firestore.collection("plans").add(data)
+            db.collection("plans").add(data)
                 .addOnSuccessListener { ref -> continuation.resume(Result.success(ref.id)) }
                 .addOnFailureListener { e  -> continuation.resume(Result.failure(e)) }
         }
@@ -57,7 +58,7 @@ class PlanRepository {
 
     suspend fun getPlan(planId: String): Result<Plan> {
         val planDoc = suspendCancellableCoroutine<DocumentSnapshot?> { cont ->
-            Firebase.firestore.collection("plans").document(planId).get()
+            db.collection("plans").document(planId).get()
                 .addOnSuccessListener { cont.resume(it) }
                 .addOnFailureListener { cont.resume(null) }
         } ?: return Result.failure(Exception("Plan not found."))
@@ -92,7 +93,7 @@ class PlanRepository {
 
     private suspend fun fetchActivity(activityId: String): Activity? =
         suspendCancellableCoroutine { continuation ->
-            Firebase.firestore.collection("activities").document(activityId).get()
+            db.collection("activities").document(activityId).get()
                 .addOnSuccessListener { doc ->
                     if (!doc.exists()) { continuation.resume(null); return@addOnSuccessListener }
                     val tags = (doc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
@@ -241,11 +242,11 @@ class PlanRepository {
     }
 
     suspend fun getMyPlans(): Result<List<Plan>> {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
         return suspendCancellableCoroutine { continuation ->
-            Firebase.firestore.collection("plans")
+            db.collection("plans")
                 .whereArrayContains("participantsIds", uid)
                 .get()
                 .addOnSuccessListener { snapshot ->
@@ -278,7 +279,7 @@ class PlanRepository {
         if (tags.isNotEmpty()) changes["tags"] = FieldValue.arrayUnion(*tags.toTypedArray())
 
         return suspendCancellableCoroutine { continuation ->
-            Firebase.firestore.collection("plans").document(planId)
+            db.collection("plans").document(planId)
                 .update(changes)
                 .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }

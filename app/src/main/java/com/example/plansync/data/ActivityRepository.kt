@@ -1,26 +1,27 @@
 package com.example.plansync.data
 
+import com.google.firebase.firestore.FirebaseFirestore
 import android.net.Uri
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.ActivityVisibility
-import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.Filter
 import com.google.firebase.firestore.SetOptions
-import com.google.firebase.firestore.firestore
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 
-class ActivityRepository {
+class ActivityRepository(
+    private val db: FirebaseFirestore = FirebaseProvider.firestore,
+    private val auth: FirebaseAuth = FirebaseProvider.auth
+) {
 
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
-    private val activities = Firebase.firestore.collection("activities")
-    private val recommendationRuns = Firebase.firestore.collection("transferConfigs")
+    private val activities = db.collection("activities")
+    private val recommendationRuns = db.collection("transferConfigs")
         .document("6ad7a48c-0000-2678-8aba-fc4116908b71")
         .collection("runs")
 
@@ -116,8 +117,6 @@ class ActivityRepository {
     ): Result<Unit> {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
-
-        val db = Firebase.firestore
         val batch = db.batch()
         val data = mutableMapOf<String, Any>(
             "name" to name,

@@ -1,25 +1,26 @@
 package com.example.plansync.data
 
+import com.google.firebase.firestore.FirebaseFirestore
 import com.example.plansync.model.Friend
 import com.example.plansync.model.FriendRequest
 import com.example.plansync.model.Group
 import com.example.plansync.model.PaymentMethod
 import com.example.plansync.model.PaymentMethodType
 import com.example.plansync.model.User
-import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.firestore
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-class CrewRepository {
+class CrewRepository(
+    private val db: FirebaseFirestore = FirebaseProvider.firestore,
+    private val auth: FirebaseAuth = FirebaseProvider.auth
+) {
 
-    private val auth = FirebaseAuth.getInstance()
-    private val groups = Firebase.firestore.collection("groups")
-    private val users = Firebase.firestore.collection("users")
+    private val groups = db.collection("groups")
+    private val users = db.collection("users")
 
     suspend fun getGroups(): Result<List<Group>> {
         val uid = auth.currentUser?.uid
@@ -177,7 +178,7 @@ class CrewRepository {
             "email" to me.email
         )
 
-        val batch = Firebase.firestore.batch()
+        val batch = db.batch()
         batch.set(users.document(uid).collection("friends").document(request.id), friendForMe)
         batch.set(users.document(request.id).collection("friends").document(uid), friendForThem)
         batch.delete(users.document(uid).collection("friendRequests").document(request.id))
