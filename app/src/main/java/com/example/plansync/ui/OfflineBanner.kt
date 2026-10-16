@@ -16,18 +16,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * UI layer — reusable offline indicator banner.
- *
- * Shown at the top of screens when the device has no internet connection.
- * Animates in/out smoothly so the layout does not jump.
- *
- * Usage: place above the main screen content inside a Column, and pass
- * [isOnline] from a ViewModel state that collects [NetworkMonitor.isOnline].
- *
- * Design pattern: Composable with animated visibility — UI reacts to
- * connectivity state exposed by ViewModel via StateFlow (Observer pattern).
- */
 @Composable
 fun OfflineBanner(
     isOnline: Boolean,

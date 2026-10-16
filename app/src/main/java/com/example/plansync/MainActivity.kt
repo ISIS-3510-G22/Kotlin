@@ -44,9 +44,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Eventual connectivity — enable Firestore offline persistence.
-        // Writes made while offline are queued locally and synced automatically
-        // when the device reconnects (Firestore SDK handles this transparently).
+        // Enable Firestore offline persistence — writes queue locally when offline.
         Firebase.firestore.firestoreSettings = FirebaseFirestoreSettings.Builder()
             .setLocalCacheSettings(
                 PersistentCacheSettings.newBuilder()
