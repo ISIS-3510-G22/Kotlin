@@ -41,6 +41,7 @@ import com.example.plansync.ui.GroupInvitesScreen
 import com.example.plansync.ui.InviteToGroupScreen
 import com.example.plansync.ui.InviteScreen
 import com.example.plansync.ui.LeaveReviewScreen
+import com.example.plansync.ui.ManageSplitsScreen
 import com.example.plansync.ui.MyActivitiesScreen
 import com.example.plansync.ui.MyCrewScreen
 import com.example.plansync.ui.MyPlansScreen
@@ -75,6 +76,7 @@ object Routes {
     const val INVITE_TO_GROUP = "invite_to_group/{groupId}"
     const val USER_DETAIL = "user_detail/{userId}"
     const val LEAVE_REVIEW = "leave_review/{planId}"
+    const val MANAGE_SPLITS = "manage_splits/{planId}"
 
     fun planDetail(planId: String) = "plan_detail/$planId"
     fun invite(planId: String)     = "invite/$planId"
@@ -85,6 +87,7 @@ object Routes {
     fun inviteToGroup(groupId: String) = "invite_to_group/$groupId"
     fun userDetail(userId: String) = "user_detail/$userId"
     fun leaveReview(planId: String) = "leave_review/$planId"
+    fun manageSplits(planId: String) = "manage_splits/$planId"
 }
 
 
@@ -176,7 +179,18 @@ fun MainNavHost(
                 onMyCrewSelected = { navController.navigate(Routes.GROUPS) },
                 onPlanSelected = { planId -> navController.navigate(Routes.planDetail(planId)) },
                 onCreatePlan = { navController.navigate(Routes.CREATE_PLAN) },
-                onLeaveReview = { planId -> navController.navigate(Routes.leaveReview(planId)) }
+                onLeaveReview = { planId -> navController.navigate(Routes.leaveReview(planId)) },
+                onManageSplits = { planId -> navController.navigate(Routes.manageSplits(planId)) }
+            )
+        }
+
+        composable(
+            route = Routes.MANAGE_SPLITS,
+            arguments = listOf(navArgument("planId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            ManageSplitsScreen(
+                planId = backStackEntry.arguments?.getString("planId").orEmpty(),
+                onBack = { navController.popBackStack() }
             )
         }
 

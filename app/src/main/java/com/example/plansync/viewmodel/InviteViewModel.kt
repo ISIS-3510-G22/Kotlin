@@ -1,9 +1,12 @@
 package com.example.plansync.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.AnalyticsRepository
 import com.example.plansync.data.InviteRepository
+import com.example.plansync.service.NotificationFactory
+import com.example.plansync.service.NotificationService
 import com.example.plansync.model.Contact
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,10 +23,11 @@ import kotlinx.coroutines.launch
  *
  * The Composable never calls InviteRepository directly.
  */
-class InviteViewModel(
-    private val repository: InviteRepository = InviteRepository(),
-    private val analyticsRepository: AnalyticsRepository = AnalyticsRepository()
-) : ViewModel() {
+class InviteViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = InviteRepository()
+    private val analyticsRepository = AnalyticsRepository()
+    private val notificationService = NotificationService(application)
 
     data class UiState(
         val contacts: List<Contact> = emptyList(),
@@ -79,6 +83,8 @@ class InviteViewModel(
             repository.inviteContact(planId, contact.id)
                 .onSuccess {
                     analyticsRepository.logEvent(AnalyticsRepository.INVITE_SENT, planId)
+                    NotificationFactory.create(AnalyticsRepository.INVITE_SENT, personName = contact.name)
+                        ?.let(notificationService::show)
                     _uiState.update { state ->
                         val updated = state.contacts.map {
                             if (it.id == contact.id) it.copy(isInvited = true) else it

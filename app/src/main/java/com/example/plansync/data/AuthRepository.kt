@@ -1,13 +1,12 @@
 package com.example.plansync.data
 
+import com.google.firebase.firestore.FirebaseFirestore
 import com.example.plansync.model.PaymentMethod
 import com.example.plansync.model.PaymentMethodType
 import com.example.plansync.model.User
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
-import com.google.firebase.Firebase
-import com.google.firebase.firestore.firestore
 
 /**
  * Data layer — Repository pattern.
@@ -17,10 +16,12 @@ import com.google.firebase.firestore.firestore
  * Swapping the auth backend (e.g. moving to a custom server) only requires
  * changing this file — LoginViewModel and LoginScreen remain untouched.
  */
-class AuthRepository {
+class AuthRepository(
+    private val db: FirebaseFirestore = FirebaseProvider.firestore,
+    private val auth: FirebaseAuth = FirebaseProvider.auth
+) {
 
     // FirebaseAuth instance — entry point for all Firebase Auth operations
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 
     /**
      * Attempts to sign in with the given [email] and [password] via Firebase Auth.
@@ -86,7 +87,7 @@ class AuthRepository {
                                 phone = phone,
                                 email = email
                             )
-                            Firebase.firestore.collection("users").document(user.id).set(user)
+                            db.collection("users").document(user.id).set(user)
                             .addOnSuccessListener{continuation.resume(Result.success(user))}
                             .addOnFailureListener{e -> continuation.resume(Result.failure(e))}
                         }
@@ -103,7 +104,7 @@ class AuthRepository {
             email = firebaseUser.email ?: ""
         )
         return suspendCancellableCoroutine { continuation ->
-            Firebase.firestore.collection("users").document(firebaseUser.uid).get()
+            db.collection("users").document(firebaseUser.uid).get()
                 .addOnSuccessListener { document ->
                     if (!document.exists()) {
                         continuation.resume(fallback)

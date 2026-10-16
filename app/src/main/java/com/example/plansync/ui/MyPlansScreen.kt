@@ -1,5 +1,10 @@
 package com.example.plansync.ui
 
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,6 +26,7 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,6 +39,7 @@ import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.MyPlansViewModel
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.sqrt
 
 @Composable
 fun MyPlansScreen(
@@ -43,12 +50,39 @@ fun MyPlansScreen(
     onMyCrewSelected: () -> Unit = {},
     onPlanSelected: (String) -> Unit = {},
     onCreatePlan: () -> Unit = {},
-    onLeaveReview: (String) -> Unit = {}
+    onLeaveReview: (String) -> Unit = {},
+    onManageSplits: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.loadPlans()
+    }
+
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        var lastShakeTime = 0L
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+                val force = sqrt(x * x + y * y + z * z) / SensorManager.GRAVITY_EARTH
+                val now = System.currentTimeMillis()
+                if (force > 2.5f && now - lastShakeTime > 2000) {
+                    lastShakeTime = now
+                    viewModel.loadPlans()
+                }
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+        if (accelerometer != null) {
+            sensorManager.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_UI)
+        }
+        onDispose { sensorManager.unregisterListener(listener) }
     }
 
     Scaffold(
@@ -74,16 +108,40 @@ fun MyPlansScreen(
                 onTabSelected = viewModel::selectTab
             )
 
+            if (uiState.respondError != null) {
+                Text(
+                    text = uiState.respondError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
+            if (uiState.selectedTab == PlanStatus.PAST && uiState.bestTag != null) {
+                Text(
+                    text = "Best rated plan type: ${uiState.bestTag} · ${String.format(Locale.US, "%.1f", uiState.bestAverage)} ★ (${reviewCountLabel(uiState.bestReviewCount)})",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF888888),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
+            val listError = if (uiState.selectedTab == PlanStatus.PENDING_INVITE) {
+                uiState.invitesError
+            } else {
+                uiState.errorMessage
+            }
+
             when {
                 uiState.isLoading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = Coral)
                     }
                 }
-                uiState.errorMessage != null -> {
+                listError != null -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = uiState.errorMessage!!,
+                            text = listError,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyLarge
                         )
@@ -100,6 +158,7 @@ fun MyPlansScreen(
                         items(uiState.filteredPlans) { plan ->
                             PlanCard(
                                 plan = plan,
+                                rainChance = rainChanceFor(plan, uiState.rainForecast),
                                 onClick = {
                                     if (plan.status == PlanStatus.PENDING_INVITE) {
                                         viewModel.onInviteTapped(plan)
@@ -108,6 +167,7 @@ fun MyPlansScreen(
                                     }
                                 },
                                 onLeaveReview = { onLeaveReview(plan.id) },
+                                onManageSplits = { onManageSplits(plan.id) },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
@@ -130,18 +190,8 @@ fun MyPlansScreen(
 }
 
 private fun inviteMetaText(plan: Plan): String {
-    val dateParts = plan.date.split(" · ")
-    val dayWithYear = dateParts[0]
-    val dayWithoutYear = dayWithYear.substringBefore(",")
-
-    var dateText = dayWithoutYear
-    if (dateParts.size > 1) {
-        val time = dateParts[1]
-        dateText = "$dayWithoutYear - $time"
-    }
-
     val peopleCount = plan.participants.size
-    return "$dateText · $peopleCount people invited"
+    return "${planDateText(plan)} · $peopleCount people invited"
 }
 
 @Composable
@@ -246,8 +296,10 @@ private fun EmptyPlansMessage(tab: PlanStatus) {
 @Composable
 private fun PlanCard(
     plan: Plan,
+    rainChance: Int? = null,
     onClick: () -> Unit = {},
     onLeaveReview: () -> Unit = {},
+    onManageSplits: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -283,8 +335,9 @@ private fun PlanCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(4.dp))
+                    val dateText = if (rainChance != null) "${planDateText(plan)} · $rainChance% rain" else planDateText(plan)
                     Text(
-                        text = "${planDateText(plan)} • ${participantCountLabel(plan.participants)}",
+                        text = "$dateText • ${participantCountLabel(plan.participants)}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF888888)
                     )
@@ -302,7 +355,7 @@ private fun PlanCard(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Button(
-                        onClick = { },
+                        onClick = onManageSplits,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -342,6 +395,14 @@ private fun planDateText(plan: Plan): String {
     val pattern = if (plan.status == PlanStatus.PAST) "MMM d · h:mm a" else "MMM d"
     return SimpleDateFormat(pattern, Locale.US).format(dateTime)
 }
+
+private fun rainChanceFor(plan: Plan, forecast: Map<String, Int>): Int? {
+    if (plan.status != PlanStatus.CONFIRMED) return null
+    val dateTime = plan.dateTime ?: return null
+    return forecast[SimpleDateFormat("yyyy-MM-dd", Locale.US).format(dateTime)]
+}
+
+private fun reviewCountLabel(count: Int): String = if (count == 1) "1 review" else "$count reviews"
 
 private fun participantCountLabel(participants: List<Participant>): String {
     return if (participants.size <= 1) "Solo Trip" else "${participants.size} People"

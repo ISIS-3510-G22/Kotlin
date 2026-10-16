@@ -16,14 +16,12 @@ class ExploreViewModel(
 
     data class UiState(
         val searchQuery: String = "",
-        val categoryOptions: List<String> = listOf("All", "Weekend Getaways", "Food & Drink", "Outdoors", "Culture"),
-        val planTypeOptions: List<String> = listOf("Solo", "Couple", "Group", "Family"),
-        val priceOptions: List<String> = listOf("Free", "$", "$$", "$$$"),
-        val ratingOptions: List<String> = listOf("4+", "3+", "All"),
+        val categoryOptions: List<String> = listOf("All"),
+        val planTypeOptions: List<String> = listOf("All", "Solo", "Couple", "Group", "Family"),
+        val priceOptions: List<String> = listOf("All", "Free", "$", "$$", "$$$"),
         val selectedCategory: String = "All",
-        val selectedPlanType: String = "Group",
-        val selectedPrice: String = "$$",
-        val selectedRating: String = "All",
+        val selectedPlanType: String = "All",
+        val selectedPrice: String = "All",
         val plans: List<Plan> = emptyList(),
         val filteredPlans: List<Plan> = emptyList(),
         val isLoading: Boolean = false,
@@ -39,7 +37,14 @@ class ExploreViewModel(
 
             repository.getPlans()
                 .onSuccess { plans ->
-                    _uiState.update { it.copy(isLoading = false, plans = plans, filteredPlans = filterPlans(plans, it)) }
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            plans = plans,
+                            categoryOptions = listOf("All") + plans.flatMap { plan -> plan.tags }.distinct().sorted(),
+                            filteredPlans = filterPlans(plans, it)
+                        )
+                    }
                 }
                 .onFailure { error ->
                     _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
@@ -55,7 +60,6 @@ class ExploreViewModel(
 
     fun onPriceSelect(price: String) = applyFilters { it.copy(selectedPrice = price) }
 
-    fun onRatingSelect(rating: String) = applyFilters { it.copy(selectedRating = rating) }
 
     private fun applyFilters(update: (UiState) -> UiState) {
         _uiState.update { current ->
@@ -64,19 +68,11 @@ class ExploreViewModel(
         }
     }
 
-    private fun filterPlans(plans: List<Plan>, state: UiState): List<Plan> {
-        val minRating = when (state.selectedRating) {
-            "4+" -> 4.0
-            "3+" -> 3.0
-            else -> 0.0
-        }
-
-        return plans.filter { plan ->
+    private fun filterPlans(plans: List<Plan>, state: UiState): List<Plan> =
+        plans.filter { plan ->
             (state.searchQuery.isBlank() || plan.title.contains(state.searchQuery, ignoreCase = true)) &&
-                (state.selectedCategory == "All" || plan.category == state.selectedCategory) &&
-                plan.planType == state.selectedPlanType &&
-                plan.priceTier == state.selectedPrice &&
-                plan.rating >= minRating
+                (state.selectedCategory == "All" || state.selectedCategory in plan.tags) &&
+                (state.selectedPlanType == "All" || plan.planType == state.selectedPlanType) &&
+                (state.selectedPrice == "All" || plan.priceTier == state.selectedPrice)
         }
-    }
 }

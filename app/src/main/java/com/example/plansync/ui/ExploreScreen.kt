@@ -112,14 +112,6 @@ fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (St
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    FilterGroupCard(
-                        title = "RATING",
-                        icon = Icons.Filled.Star,
-                        options = uiState.ratingOptions,
-                        selected = uiState.selectedRating,
-                        onSelect = viewModel::onRatingSelect,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
             }
 

@@ -3,6 +3,8 @@ package com.example.plansync.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.PlanRepository
+import com.example.plansync.data.ReviewRepository
+import com.example.plansync.data.WeatherRepository
 import com.example.plansync.model.InviteResponse
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
@@ -12,48 +14,97 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-
 class MyPlansViewModel(
-    private val repository: PlanRepository = PlanRepository()
+    private val repository: PlanRepository = PlanRepository(),
+    private val weatherRepository: WeatherRepository = WeatherRepository(),
+    private val reviewRepository: ReviewRepository = ReviewRepository()
 ) : ViewModel() {
 
     data class UiState(
         val allPlans: List<Plan> = emptyList(),
+        val invites: List<Plan> = emptyList(),
         val selectedTab: PlanStatus = PlanStatus.CONFIRMED,
         val filteredPlans: List<Plan> = emptyList(),
         val isLoading: Boolean = false,
         val errorMessage: String? = null,
-        val selectedInvite: Plan? = null
+        val invitesError: String? = null,
+        val respondError: String? = null,
+        val selectedInvite: Plan? = null,
+        val rainForecast: Map<String, Int> = emptyMap(),
+        val bestTag: String? = null,
+        val bestAverage: Double = 0.0,
+        val bestReviewCount: Int = 0
     )
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    private var initialTabChosen = false
+
     fun loadPlans() {
+        loadRainForecast()
+        loadBestRatedTag()
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, invitesError = null, respondError = null) }
 
             repository.getMyPlans()
-                .onSuccess { plans ->
-                    _uiState.update { current ->
-                        current.copy(
-                            isLoading = false,
-                            allPlans = plans,
-                            filteredPlans = plansForTab(plans, current.selectedTab)
-                        )
-                    }
+                .onSuccess { plans -> _uiState.update { it.copy(allPlans = plans) } }
+                .onFailure { error -> _uiState.update { it.copy(errorMessage = error.message) } }
+
+            repository.getMyInvites()
+                .onSuccess { invites -> _uiState.update { it.copy(invites = invites) } }
+                .onFailure { error -> _uiState.update { it.copy(invitesError = error.message) } }
+
+            if (!initialTabChosen) {
+                initialTabChosen = true
+                if (_uiState.value.invites.isNotEmpty()) {
+                    _uiState.update { it.copy(selectedTab = PlanStatus.PENDING_INVITE) }
                 }
-                .onFailure { error ->
-                    _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+            }
+
+            _uiState.update { current ->
+                current.copy(
+                    isLoading = false,
+                    filteredPlans = plansForTab(current.allPlans + current.invites, current.selectedTab)
+                )
+            }
+        }
+    }
+
+    private fun loadRainForecast() {
+        viewModelScope.launch {
+            weatherRepository.getRainForecast()
+                .onSuccess { forecast -> _uiState.update { it.copy(rainForecast = forecast) } }
+        }
+    }
+
+    private fun loadBestRatedTag() {
+        viewModelScope.launch {
+            reviewRepository.getRatingsByTag()
+                .onSuccess { ratingsByTag ->
+                    var bestTag: String? = null
+                    var bestAverage = 0.0
+                    var bestCount = 0
+                    for ((tag, ratings) in ratingsByTag) {
+                        val average = ratings.average()
+                        if (bestTag == null || average > bestAverage || (average == bestAverage && ratings.size > bestCount)) {
+                            bestTag = tag
+                            bestAverage = average
+                            bestCount = ratings.size
+                        }
+                    }
+                    _uiState.update { it.copy(bestTag = bestTag, bestAverage = bestAverage, bestReviewCount = bestCount) }
                 }
         }
     }
 
     fun selectTab(tab: PlanStatus) {
+        initialTabChosen = true
         _uiState.update { current ->
             current.copy(
                 selectedTab = tab,
-                filteredPlans = plansForTab(current.allPlans, tab)
+                respondError = null,
+                filteredPlans = plansForTab(current.allPlans + current.invites, tab)
             )
         }
     }
@@ -67,62 +118,24 @@ class MyPlansViewModel(
     }
 
     fun onInviteGoing() {
-        val invite = _uiState.value.selectedInvite
-        if (invite == null) {
-            return
-        }
-
-        viewModelScope.launch {
-            repository.respondToInvite(invite.id, InviteResponse.GOING)
-                .onSuccess {
-                    val updatedPlans = mutableListOf<Plan>()
-                    for (plan in _uiState.value.allPlans) {
-                        if (plan.id == invite.id) {
-                            updatedPlans.add(plan.copy(status = PlanStatus.CONFIRMED))
-                        } else {
-                            updatedPlans.add(plan)
-                        }
-                    }
-                    _uiState.update { current ->
-                        current.copy(
-                            allPlans = updatedPlans,
-                            filteredPlans = plansForTab(updatedPlans, current.selectedTab),
-                            selectedInvite = null
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    _uiState.update { it.copy(errorMessage = error.message, selectedInvite = null) }
-                }
-        }
+        respondToInvite(InviteResponse.GOING)
     }
 
     fun onInviteCantMake() {
+        respondToInvite(InviteResponse.CANT_MAKE)
+    }
+
+    private fun respondToInvite(response: InviteResponse) {
         val invite = _uiState.value.selectedInvite
         if (invite == null) {
             return
         }
+        _uiState.update { it.copy(selectedInvite = null) }
 
         viewModelScope.launch {
-            repository.respondToInvite(invite.id, InviteResponse.CANT_MAKE)
-                .onSuccess {
-                    val remainingPlans = mutableListOf<Plan>()
-                    for (plan in _uiState.value.allPlans) {
-                        if (plan.id != invite.id) {
-                            remainingPlans.add(plan)
-                        }
-                    }
-                    _uiState.update { current ->
-                        current.copy(
-                            allPlans = remainingPlans,
-                            filteredPlans = plansForTab(remainingPlans, current.selectedTab),
-                            selectedInvite = null
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    _uiState.update { it.copy(errorMessage = error.message, selectedInvite = null) }
-                }
+            repository.respondToInvite(invite.id, response)
+                .onSuccess { loadPlans() }
+                .onFailure { error -> _uiState.update { it.copy(respondError = error.message) } }
         }
     }
 

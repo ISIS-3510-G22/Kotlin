@@ -1,7 +1,6 @@
 package com.example.plansync.data
 
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
+import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Date
 
 /**
@@ -14,9 +13,10 @@ import java.util.Date
  * Silent on failure — analytics must never crash the app.
  * Each ViewModel injects this repository to log its own events.
  */
-class AnalyticsRepository {
+class AnalyticsRepository(
+    private val db: FirebaseFirestore = FirebaseProvider.firestore
+) {
 
-    private val db = Firebase.firestore
 
     /**
      * Logs a named event with an optional [planId] and current timestamp.
@@ -42,5 +42,6 @@ class AnalyticsRepository {
         // Invite and plan creation events
         const val INVITE_SENT  = "invite_sent"
         const val PLAN_CREATED = "plan_created"
+        const val EXPENSE_ADDED = "expense_added"
     }
 }

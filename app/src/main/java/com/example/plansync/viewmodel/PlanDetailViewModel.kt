@@ -1,9 +1,12 @@
 package com.example.plansync.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.AnalyticsRepository
 import com.example.plansync.data.PlanRepository
+import com.example.plansync.service.NotificationFactory
+import com.example.plansync.service.NotificationService
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,10 +27,11 @@ import kotlinx.coroutines.launch
  * The Composable calls [loadPlan] once on first composition and never
  * touches [PlanRepository] directly.
  */
-class PlanDetailViewModel(
-    private val repository: PlanRepository = PlanRepository(),
-    private val analyticsRepository: AnalyticsRepository = AnalyticsRepository()
-) : ViewModel() {
+class PlanDetailViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = PlanRepository()
+    private val analyticsRepository = AnalyticsRepository()
+    private val notificationService = NotificationService(application)
 
     /**
      * Immutable snapshot of everything PlanDetailScreen needs to render itself.
@@ -62,18 +66,21 @@ class PlanDetailViewModel(
     /** Analytics: user confirmed attendance — logs rsvp_confirmed event. */
     fun onRsvpGoing(planId: String) {
         analyticsRepository.logEvent(AnalyticsRepository.RSVP_CONFIRMED, planId)
+        notifyRsvp(AnalyticsRepository.RSVP_CONFIRMED)
         _uiState.update { it.copy(showRsvpDialog = false) }
     }
 
     /** Analytics: user declined — logs rsvp_declined event. */
     fun onRsvpDeclined(planId: String) {
         analyticsRepository.logEvent(AnalyticsRepository.RSVP_DECLINED, planId)
+        notifyRsvp(AnalyticsRepository.RSVP_DECLINED)
         _uiState.update { it.copy(showRsvpDialog = false) }
     }
 
     /** Analytics: user deferred — logs rsvp_deferred event. */
     fun onRsvpDeferred(planId: String) {
         analyticsRepository.logEvent(AnalyticsRepository.RSVP_DEFERRED, planId)
+        notifyRsvp(AnalyticsRepository.RSVP_DEFERRED)
         _uiState.update { it.copy(showRsvpDialog = false) }
     }
 
@@ -95,5 +102,10 @@ class PlanDetailViewModel(
                     _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
                 }
         }
+    }
+
+    private fun notifyRsvp(event: String) {
+        val planName = _uiState.value.plan?.title.orEmpty()
+        NotificationFactory.create(event, planName = planName)?.let(notificationService::show)
     }
 }
