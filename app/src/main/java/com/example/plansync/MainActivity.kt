@@ -21,7 +21,12 @@ import com.example.plansync.ui.LoginScreen
 import com.example.plansync.ui.SignUpScreen
 import com.example.plansync.ui.navigation.MainNavHost
 import com.example.plansync.ui.theme.PlanSyncTheme
+import com.google.firebase.Firebase
+import com.google.firebase.firestore.FirebaseFirestoreSettings
+import com.google.firebase.firestore.PersistentCacheSettings
+import com.google.firebase.firestore.firestore
 import com.google.firebase.auth.FirebaseAuth
+
 
 /**
  * UI layer — single Activity, entry point of the application.
@@ -38,6 +43,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Enable Firestore offline persistence — writes queue locally when offline.
+        Firebase.firestore.firestoreSettings = FirebaseFirestoreSettings.Builder()
+            .setLocalCacheSettings(
+                PersistentCacheSettings.newBuilder()
+                    .setSizeBytes(FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
+                    .build()
+            )
+            .build()
+
         enableEdgeToEdge()
         setContent {
             PlanSyncTheme {
