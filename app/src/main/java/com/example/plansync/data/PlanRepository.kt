@@ -3,10 +3,12 @@ package com.example.plansync.data
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
+import com.example.plansync.model.Invitation
 import com.example.plansync.model.InviteResponse
 import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
+import com.example.plansync.model.RsvpStatus
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
@@ -48,7 +50,7 @@ class PlanRepository(
                 "participantsIds"  to listOf(uid),
                 "activityIds"      to activityIds,
                 "tags"             to tags,
-                "invitations"      to emptyList<String>()
+                "invitations"      to listOf(mapOf("userId" to uid, "rsvp" to "going"))
             )
             db.collection("plans").add(data)
                 .addOnSuccessListener { ref -> continuation.resume(Result.success(ref.id)) }
@@ -71,22 +73,31 @@ class PlanRepository(
             fetchActivity(actId)?.let { activities.add(it) }
         }
 
+        val uid = auth.currentUser?.uid
         val tags = (planDoc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
+        val invitations = parseInvitations(planDoc)
+        val planDate = planDoc.getTimestamp("date")?.toDate()
+        val status = when {
+            uid != null && invitations.find { it.userId == uid }?.rsvp == RsvpStatus.INVITED -> PlanStatus.PENDING_INVITE
+            planDate != null && planDate.before(Date()) -> PlanStatus.PAST
+            else -> PlanStatus.CONFIRMED
+        }
         return Result.success(
             Plan(
                 id = planDoc.id,
                 title = planDoc.getString("name").orEmpty(),
-                date = planDoc.getTimestamp("date")
-                    ?.let { SimpleDateFormat("MMM d, yyyy", Locale.US).format(it.toDate()) }
+                date = planDate
+                    ?.let { SimpleDateFormat("MMM d, yyyy", Locale.US).format(it) }
                     .orEmpty(),
                 estimatedCostPerPerson = activities.sumOf { it.price },
                 participants = (planDoc.get("participantsIds") as? List<*>).orEmpty()
                     .filterIsInstance<String>()
                     .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i % 5) },
                 activities = activities,
-                status = PlanStatus.CONFIRMED,
+                status = status,
                 activityIds = activityIds,
-                category = tags.firstOrNull().orEmpty()
+                category = tags.firstOrNull().orEmpty(),
+                invitations = invitations
             )
         )
     }
@@ -252,6 +263,13 @@ class PlanRepository(
                 .addOnSuccessListener { snapshot ->
                     val plans = snapshot.documents.map { doc ->
                         val dateTime = doc.getTimestamp("date")?.toDate()
+                        val invitations = parseInvitations(doc)
+                        val myRsvp = invitations.find { it.userId == uid }?.rsvp
+                        val status = when {
+                            myRsvp == RsvpStatus.INVITED -> PlanStatus.PENDING_INVITE
+                            dateTime != null && dateTime.before(Date()) -> PlanStatus.PAST
+                            else -> PlanStatus.CONFIRMED
+                        }
                         Plan(
                             id = doc.id,
                             title = doc.getString("name").orEmpty(),
@@ -263,9 +281,10 @@ class PlanRepository(
                                 .filterIsInstance<String>()
                                 .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i) },
                             activities = emptyList(),
-                            status = if (dateTime != null && dateTime.before(Date())) PlanStatus.PAST else PlanStatus.CONFIRMED,
+                            status = status,
                             activityIds = (doc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>(),
-                            dateTime = dateTime
+                            dateTime = dateTime,
+                            invitations = invitations
                         )
                     }
                     continuation.resume(Result.success(plans))
@@ -302,6 +321,60 @@ class PlanRepository(
             status = PlanStatus.PENDING_INVITE,
             dateTime = getTimestamp("date")?.toDate()
         )
+
+    /**
+     * Tolerant parser: maps → parsed normally, plain strings → INVITED with null invitedAt,
+     * unknown rsvp values or malformed entries are skipped.
+     */
+    private fun parseInvitations(doc: DocumentSnapshot): List<Invitation> {
+        val raw = (doc.get("invitations") as? List<*>).orEmpty()
+        return raw.mapNotNull { entry ->
+            when {
+                entry is Map<*, *> -> {
+                    val userId = entry["userId"] as? String ?: return@mapNotNull null
+                    val rsvp = RsvpStatus.from(entry["rsvp"] as? String) ?: return@mapNotNull null
+                    val invitedAt = (entry["invitedAt"] as? Timestamp)?.toDate()
+                    Invitation(userId = userId, rsvp = rsvp, invitedAt = invitedAt)
+                }
+                entry is String -> Invitation(userId = entry, rsvp = RsvpStatus.INVITED, invitedAt = null)
+                else -> null
+            }
+        }
+    }
+
+    /** Mirrors Flutter's setRsvp — rewrites this user's entry in the invitations array. */
+    suspend fun setRsvp(planId: String, status: RsvpStatus): Result<Unit> {
+        val uid = auth.currentUser?.uid
+            ?: return Result.failure(Exception("No active session."))
+
+        return suspendCancellableCoroutine { continuation ->
+            val ref = db.collection("plans").document(planId)
+            db.runTransaction { transaction ->
+                val doc = transaction.get(ref)
+                val raw = (doc.get("invitations") as? List<*>).orEmpty()
+                val hasEntry = raw.any { e ->
+                    (e is Map<*, *> && e["userId"] == uid) || (e is String && e == uid)
+                }
+                val updated = if (hasEntry) {
+                    raw.map { entry ->
+                        when {
+                            entry is Map<*, *> && entry["userId"] == uid ->
+                                hashMapOf("userId" to uid, "rsvp" to status.value,
+                                    "invitedAt" to entry["invitedAt"])
+                            entry is String && entry == uid ->
+                                hashMapOf("userId" to uid, "rsvp" to status.value)
+                            else -> entry
+                        }
+                    }
+                } else {
+                    raw + hashMapOf("userId" to uid, "rsvp" to status.value)
+                }
+                transaction.update(ref, "invitations", updated)
+            }
+            .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
+            .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }
+    }
 
     suspend fun addActivityToPlan(planId: String, activityId: String, tags: List<String>): Result<Unit> {
         val changes = mutableMapOf<String, Any>("activityIds" to FieldValue.arrayUnion(activityId))
