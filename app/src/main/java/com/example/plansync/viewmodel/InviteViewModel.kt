@@ -82,7 +82,7 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             repository.inviteContact(planId, contact.id)
                 .onSuccess {
-                    analyticsRepository.logEvent(AnalyticsRepository.INVITE_SENT, planId)
+                    analyticsRepository.logEvent(AnalyticsRepository.INVITE_SENT, planId, inviteeId = contact.id)
                     NotificationFactory.create(AnalyticsRepository.INVITE_SENT, personName = contact.name)
                         ?.let(notificationService::show)
                     _uiState.update { state ->

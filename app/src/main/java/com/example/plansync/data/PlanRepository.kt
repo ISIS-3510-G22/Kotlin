@@ -4,7 +4,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.Invitation
-import com.example.plansync.model.InviteResponse
 import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
@@ -293,35 +292,6 @@ class PlanRepository(
         }
     }
 
-    suspend fun getMyInvites(): Result<List<Plan>> {
-        val uid = auth.currentUser?.uid
-            ?: return Result.failure(Exception("No active session."))
-
-        return suspendCancellableCoroutine { continuation ->
-            db.collection("plans")
-                .whereArrayContains("invitations", uid)
-                .get()
-                .addOnSuccessListener { snapshot ->
-                    continuation.resume(Result.success(snapshot.documents.map { it.toInvitePlan() }))
-                }
-                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-        }
-    }
-
-    private fun DocumentSnapshot.toInvitePlan(): Plan =
-        Plan(
-            id = id,
-            title = getString("name").orEmpty(),
-            date = "",
-            estimatedCostPerPerson = 0,
-            participants = (get("participantsIds") as? List<*>).orEmpty()
-                .filterIsInstance<String>()
-                .mapIndexed { i, participantId -> Participant(id = participantId, initials = "", avatarColorIndex = i) },
-            activities = emptyList(),
-            status = PlanStatus.PENDING_INVITE,
-            dateTime = getTimestamp("date")?.toDate()
-        )
-
     /**
      * Tolerant parser: maps → parsed normally, plain strings → INVITED with null invitedAt,
      * unknown rsvp values or malformed entries are skipped.
@@ -388,26 +358,4 @@ class PlanRepository(
         }
     }
 
-    suspend fun respondToInvite(planId: String, response: InviteResponse): Result<Unit> {
-        val uid = auth.currentUser?.uid
-            ?: return Result.failure(Exception("No active session."))
-
-        val changes = when (response) {
-            InviteResponse.GOING -> mapOf(
-                "invitations" to FieldValue.arrayRemove(uid),
-                "participantsIds" to FieldValue.arrayUnion(uid)
-            )
-            InviteResponse.CANT_MAKE -> mapOf(
-                "invitations" to FieldValue.arrayRemove(uid),
-                "declinedIds" to FieldValue.arrayUnion(uid)
-            )
-        }
-
-        return suspendCancellableCoroutine { continuation ->
-            db.collection("plans").document(planId)
-                .update(changes)
-                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
-                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-        }
-    }
 }
