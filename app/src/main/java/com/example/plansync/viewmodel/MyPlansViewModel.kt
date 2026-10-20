@@ -5,9 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.ReviewRepository
 import com.example.plansync.data.WeatherRepository
-import com.example.plansync.model.InviteResponse
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
+import com.example.plansync.model.RsvpStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,9 +51,11 @@ class MyPlansViewModel(
                 .onSuccess { plans -> _uiState.update { it.copy(allPlans = plans) } }
                 .onFailure { error -> _uiState.update { it.copy(errorMessage = error.message) } }
 
-            repository.getMyInvites()
-                .onSuccess { invites -> _uiState.update { it.copy(invites = invites) } }
-                .onFailure { error -> _uiState.update { it.copy(invitesError = error.message) } }
+            // invites are now embedded in allPlans via participantsIds + rsvp == INVITED
+            val pendingInvites = _uiState.value.allPlans.filter { it.status == PlanStatus.PENDING_INVITE }
+            if (pendingInvites.isNotEmpty()) {
+                _uiState.update { it.copy(invites = pendingInvites) }
+            }
 
             if (!initialTabChosen) {
                 initialTabChosen = true
@@ -118,14 +120,14 @@ class MyPlansViewModel(
     }
 
     fun onInviteGoing() {
-        respondToInvite(InviteResponse.GOING)
+        respondToInvite(RsvpStatus.GOING)
     }
 
     fun onInviteCantMake() {
-        respondToInvite(InviteResponse.CANT_MAKE)
+        respondToInvite(RsvpStatus.NOT_GOING)
     }
 
-    private fun respondToInvite(response: InviteResponse) {
+    private fun respondToInvite(status: RsvpStatus) {
         val invite = _uiState.value.selectedInvite
         if (invite == null) {
             return
@@ -133,7 +135,7 @@ class MyPlansViewModel(
         _uiState.update { it.copy(selectedInvite = null) }
 
         viewModelScope.launch {
-            repository.respondToInvite(invite.id, response)
+            repository.setRsvp(invite.id, status)
                 .onSuccess { loadPlans() }
                 .onFailure { error -> _uiState.update { it.copy(respondError = error.message) } }
         }

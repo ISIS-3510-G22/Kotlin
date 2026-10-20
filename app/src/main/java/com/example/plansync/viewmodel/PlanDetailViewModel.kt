@@ -9,6 +9,7 @@ import com.example.plansync.service.NotificationFactory
 import com.example.plansync.service.NotificationService
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
+import com.example.plansync.model.RsvpStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,21 +64,25 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.update { it.copy(showRsvpDialog = false) }
     }
 
-    /** Analytics: user confirmed attendance — logs rsvp_confirmed event. */
     fun onRsvpGoing(planId: String) {
         analyticsRepository.logEvent(AnalyticsRepository.RSVP_CONFIRMED, planId)
         notifyRsvp(AnalyticsRepository.RSVP_CONFIRMED)
         _uiState.update { it.copy(showRsvpDialog = false) }
+        viewModelScope.launch {
+            repository.setRsvp(planId, RsvpStatus.GOING).onSuccess { loadPlan(planId) }
+        }
     }
 
-    /** Analytics: user declined — logs rsvp_declined event. */
     fun onRsvpDeclined(planId: String) {
         analyticsRepository.logEvent(AnalyticsRepository.RSVP_DECLINED, planId)
         notifyRsvp(AnalyticsRepository.RSVP_DECLINED)
         _uiState.update { it.copy(showRsvpDialog = false) }
+        viewModelScope.launch {
+            repository.setRsvp(planId, RsvpStatus.NOT_GOING).onSuccess { loadPlan(planId) }
+        }
     }
 
-    /** Analytics: user deferred — logs rsvp_deferred event. */
+    /** Deferred — no write; user can decide later. */
     fun onRsvpDeferred(planId: String) {
         analyticsRepository.logEvent(AnalyticsRepository.RSVP_DEFERRED, planId)
         notifyRsvp(AnalyticsRepository.RSVP_DEFERRED)
