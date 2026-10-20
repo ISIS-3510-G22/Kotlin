@@ -2,9 +2,9 @@ package com.example.plansync.data
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.plansync.model.Contact
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.SetOptions
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -44,13 +44,19 @@ class InviteRepository(
         }
     }
 
-    /**
-     * Adds the contactId to the plan's invitations array in Firestore.
-     */
+    /** Adds the invitee to participantsIds and writes a {userId, rsvp, invitedAt} map entry. */
     suspend fun inviteContact(planId: String, contactId: String): Result<Unit> =
         suspendCancellableCoroutine { continuation ->
+            val invitationEntry = hashMapOf(
+                "userId"    to contactId,
+                "rsvp"      to "invited",
+                "invitedAt" to Timestamp.now()
+            )
             db.collection("plans").document(planId)
-                .set(mapOf("invitations" to FieldValue.arrayUnion(contactId)), SetOptions.merge())
+                .update(mapOf(
+                    "participantsIds" to FieldValue.arrayUnion(contactId),
+                    "invitations"     to FieldValue.arrayUnion(invitationEntry)
+                ))
                 .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
