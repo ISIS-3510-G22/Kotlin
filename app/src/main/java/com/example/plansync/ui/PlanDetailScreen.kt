@@ -58,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.Participant
@@ -410,19 +411,29 @@ private fun ParticipantAvatar(participant: Participant) {
     val bgColor = avatarColors.getOrElse(participant.avatarColorIndex) { CoralLight }
     val textColor = if (participant.avatarColorIndex <= 1) Color.White else Color(0xFF444444)
 
-    Box(
-        modifier = Modifier
-            .size(52.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(bgColor),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = participant.initials,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = textColor
+    if (participant.photoUrl.isNotBlank()) {
+        AsyncImage(
+            model = participant.photoUrl,
+            contentDescription = participant.initials,
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(12.dp))
         )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(bgColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = participant.initials,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = textColor
+            )
+        }
     }
 }
 

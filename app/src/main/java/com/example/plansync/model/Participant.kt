@@ -10,5 +10,6 @@ package com.example.plansync.model
 data class Participant(
     val id: String,
     val initials: String,
-    val avatarColorIndex: Int
+    val avatarColorIndex: Int,
+    val photoUrl: String = ""
 )

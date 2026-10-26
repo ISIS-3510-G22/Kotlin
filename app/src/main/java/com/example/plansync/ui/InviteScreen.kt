@@ -71,9 +71,8 @@ fun InviteScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Load contacts once when screen enters composition
-    LaunchedEffect(Unit) {
-        viewModel.loadContacts()
+    LaunchedEffect(planId) {
+        viewModel.loadContacts(planId)
     }
 
     Column(

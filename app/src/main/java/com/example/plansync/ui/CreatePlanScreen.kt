@@ -1,9 +1,6 @@
 package com.example.plansync.ui
 
 import android.Manifest
-import android.content.Context
-import android.location.Geocoder
-import android.location.LocationManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -58,11 +55,9 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -72,10 +67,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.plansync.model.Activity
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.CreatePlanViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.util.Locale
 
 /**
  * UI layer — Composable screen for creating a new Plan.
@@ -100,8 +91,6 @@ fun CreatePlanScreen(
     onSaved: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     // Pre-select activity if navigated from "Add to Plan"
     LaunchedEffect(preselectedActivityId) {
@@ -112,27 +101,10 @@ fun CreatePlanScreen(
         if (uiState.isSaved) onSaved()
     }
 
-    // ── Sensor: GPS location permission + resolution ──────────────────────────
+    // ── Sensor: GPS location permission — resolution handled by ViewModel ────
     val locationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            scope.launch(Dispatchers.IO) {
-                val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-                @Suppress("MissingPermission")
-                val loc = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                    ?: lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                val address = if (loc != null) {
-                    @Suppress("DEPRECATION")
-                    Geocoder(context, Locale.getDefault())
-                        .getFromLocation(loc.latitude, loc.longitude, 1)
-                        ?.firstOrNull()?.getAddressLine(0)
-                        ?: "${String.format("%.4f", loc.latitude)}, ${String.format("%.4f", loc.longitude)}"
-                } else "Unable to detect location"
-                withContext(Dispatchers.Main) { viewModel.onLocationDetected(address) }
-            }
-        }
-    }
+    ) { granted -> if (granted) viewModel.detectLocation() }
 
     // ── Date picker dialog ────────────────────────────────────────────────────
     if (uiState.showDatePicker) {
