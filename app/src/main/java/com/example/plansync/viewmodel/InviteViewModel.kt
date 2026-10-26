@@ -40,11 +40,11 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    /** Load suggested contacts when the screen first opens. */
-    fun loadContacts() {
+    /** Load suggested contacts for [planId], marking those already invited. */
+    fun loadContacts(planId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val contacts = repository.getSuggestedContacts()
+            val contacts = repository.getSuggestedContacts(planId)
             _uiState.update {
                 it.copy(isLoading = false, contacts = contacts, filteredContacts = contacts)
             }
