@@ -27,6 +27,17 @@ class LocationService(private val context: Context) {
     }
 
     @Suppress("DEPRECATION")
+    suspend fun reverseGeocode(lat: Double, lng: Double): String = withContext(Dispatchers.IO) {
+        runCatching {
+            Geocoder(context, java.util.Locale.getDefault())
+                .getFromLocation(lat, lng, 1)
+                ?.firstOrNull()
+                ?.getAddressLine(0)
+        }.getOrNull()
+            ?: "${String.format("%.4f", lat)}, ${String.format("%.4f", lng)}"
+    }
+
+    @Suppress("DEPRECATION")
     suspend fun coordinatesFor(address: String): Location? = withContext(Dispatchers.IO) {
         runCatching { Geocoder(context).getFromLocationName(address, 1)?.firstOrNull() }
             .getOrNull()
