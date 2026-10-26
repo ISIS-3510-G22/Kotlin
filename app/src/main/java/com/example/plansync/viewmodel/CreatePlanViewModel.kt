@@ -204,7 +204,7 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
                 ),
                 isPublic    = state.isPublic,
                 activityIds = state.selectedActivities.map { it.id },
-                tags        = state.selectedActivities.map { it.category }.distinct()
+                tags        = state.selectedActivities.flatMap { it.tags }.filter { it.isNotBlank() }.distinct()
             ).onSuccess {
                 _uiState.update { it.copy(isLoading = false, isSaved = true) }
             }.onFailure { error ->
