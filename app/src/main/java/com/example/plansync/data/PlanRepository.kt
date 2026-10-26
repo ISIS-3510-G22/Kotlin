@@ -11,6 +11,7 @@ import com.example.plansync.model.RsvpStatus
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -73,7 +74,7 @@ class PlanRepository(
         }
 
         val uid = auth.currentUser?.uid
-        val tags = (planDoc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
+        val planTags = (planDoc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
         val invitations = parseInvitations(planDoc)
         val planDate = planDoc.getTimestamp("date")?.toDate()
         val status = when {
@@ -81,6 +82,17 @@ class PlanRepository(
             planDate != null && planDate.before(Date()) -> PlanStatus.PAST
             else -> PlanStatus.CONFIRMED
         }
+        val goingIds = invitations.filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
+        val participants = if (goingIds.isNotEmpty()) {
+            fetchGoingParticipants(goingIds)
+        } else {
+            (planDoc.get("participantsIds") as? List<*>).orEmpty()
+                .filterIsInstance<String>()
+                .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i % 5) }
+        }
+        val totalCost = activities.sumOf { it.price.toDouble() }
+        val costPerPerson = if (participants.isNotEmpty() && totalCost > 0)
+            (totalCost / participants.size).toInt() else totalCost.toInt()
         return Result.success(
             Plan(
                 id = planDoc.id,
@@ -88,14 +100,12 @@ class PlanRepository(
                 date = planDate
                     ?.let { SimpleDateFormat("MMM d, yyyy", Locale.US).format(it) }
                     .orEmpty(),
-                estimatedCostPerPerson = activities.sumOf { it.price },
-                participants = (planDoc.get("participantsIds") as? List<*>).orEmpty()
-                    .filterIsInstance<String>()
-                    .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i % 5) },
+                estimatedCostPerPerson = costPerPerson,
+                participants = participants,
                 activities = activities,
                 status = status,
                 activityIds = activityIds,
-                category = tags.firstOrNull().orEmpty(),
+                category = planTags.firstOrNull().orEmpty(),
                 invitations = invitations
             )
         )
@@ -106,16 +116,17 @@ class PlanRepository(
             db.collection("activities").document(activityId).get()
                 .addOnSuccessListener { doc ->
                     if (!doc.exists()) { continuation.resume(null); return@addOnSuccessListener }
-                    val tags = (doc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
+                    val actTags = (doc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
                     continuation.resume(
                         Activity(
                             id = doc.id,
                             name = doc.getString("name").orEmpty(),
-                            category = tags.firstOrNull().orEmpty(),
+                            category = actTags.firstOrNull().orEmpty(),
                             description = doc.getString("notes").orEmpty(),
                             address = doc.getString("address").orEmpty(),
                             iconType = ActivityIcon.DEFAULT,
-                            price = (doc.getDouble("expectedPrice") ?: 0.0).toInt()
+                            price = (doc.getDouble("expectedPrice") ?: 0.0).toInt(),
+                            tags = actTags
                         )
                     )
                 }
@@ -344,6 +355,41 @@ class PlanRepository(
             .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
             .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
+    }
+
+    private suspend fun fetchGoingParticipants(goingIds: List<String>): List<Participant> {
+        if (goingIds.isEmpty()) return emptyList()
+        val participants = mutableListOf<Participant>()
+        goingIds.chunked(10).forEach { batch ->
+            suspendCancellableCoroutine<Unit> { cont ->
+                db.collection("users")
+                    .whereIn(FieldPath.documentId(), batch)
+                    .get()
+                    .addOnSuccessListener { snapshot ->
+                        snapshot.documents.forEach { doc ->
+                            val name = doc.getString("name").orEmpty()
+                            val lastName = doc.getString("lastName").orEmpty()
+                            participants.add(
+                                Participant(
+                                    id = doc.id,
+                                    initials = buildInitials(name, lastName),
+                                    avatarColorIndex = participants.size % 4,
+                                    photoUrl = doc.getString("photoUrl").orEmpty()
+                                )
+                            )
+                        }
+                        cont.resume(Unit)
+                    }
+                    .addOnFailureListener { cont.resume(Unit) }
+            }
+        }
+        return participants
+    }
+
+    private fun buildInitials(name: String, lastName: String): String {
+        val f = name.trim().firstOrNull()?.uppercaseChar() ?: ' '
+        val l = lastName.trim().firstOrNull()?.uppercaseChar() ?: ' '
+        return "$f$l".trim().ifBlank { "?" }
     }
 
     suspend fun addActivityToPlan(planId: String, activityId: String, tags: List<String>): Result<Unit> {
