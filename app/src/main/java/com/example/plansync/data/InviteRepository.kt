@@ -63,14 +63,7 @@ class InviteRepository(
                 .addOnFailureListener { cont.resume(Unit) }
         }
 
-        // Legacy: users/{uid}/friends subcollection
-        val legacyIds = suspendCancellableCoroutine<List<String>> { cont ->
-            db.collection("users").document(uid).collection("friends").get()
-                .addOnSuccessListener { snap -> cont.resume(snap.documents.map { it.id }) }
-                .addOnFailureListener { cont.resume(emptyList()) }
-        }
-
-        val allIds = (friendIds + legacyIds).toList()
+        val allIds = friendIds.toList()
         if (allIds.isEmpty()) return emptyList()
 
         // Fetch user documents in batches of 10
