@@ -85,6 +85,7 @@ class ReviewRepository(
         for (planDoc in planDocs) {
             val date = planDoc.getTimestamp("date")?.toDate()
             if (date == null || !date.before(Date())) continue
+            if (!isGoing(planDoc, uid)) continue
             val tags = (planDoc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>().filter { it.isNotBlank() }
             if (tags.isEmpty()) continue
             val ratings = getRatings(planDoc.id).getOrElse { return Result.failure(it) }
@@ -95,6 +96,11 @@ class ReviewRepository(
         }
         return Result.success(ratingsByTag)
     }
+
+    private fun isGoing(planDoc: DocumentSnapshot, uid: String): Boolean =
+        (planDoc.get("invitations") as? List<*>).orEmpty()
+            .filterIsInstance<Map<*, *>>()
+            .any { it["userId"] == uid && it["rsvp"] == "going" }
 
     private suspend fun getRatings(planId: String): Result<List<Int>> =
         suspendCancellableCoroutine { continuation ->
