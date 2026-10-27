@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Park
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
@@ -54,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -411,27 +413,34 @@ private fun ParticipantAvatar(participant: Participant) {
     val bgColor = avatarColors.getOrElse(participant.avatarColorIndex) { CoralLight }
     val textColor = if (participant.avatarColorIndex <= 1) Color.White else Color(0xFF444444)
 
-    if (participant.photoUrl.isNotBlank()) {
-        AsyncImage(
-            model = participant.photoUrl,
-            contentDescription = participant.initials,
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(12.dp))
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(bgColor),
-            contentAlignment = Alignment.Center
-        ) {
+    Box(
+        modifier = Modifier
+            .size(52.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(bgColor),
+        contentAlignment = Alignment.Center
+    ) {
+        if (participant.initials.isBlank()) {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = null,
+                tint = textColor,
+                modifier = Modifier.size(24.dp)
+            )
+        } else {
             Text(
                 text = participant.initials,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = textColor
+            )
+        }
+        if (participant.photoUrl.isNotBlank()) {
+            AsyncImage(
+                model = participant.photoUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
         }
     }

@@ -83,15 +83,7 @@ class PlanRepository(
             else -> PlanStatus.CONFIRMED
         }
         val goingIds = invitations.filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
-        val participants = if (goingIds.isNotEmpty()) {
-            fetchGoingParticipants(goingIds)
-        } else {
-            // Fallback for legacy plans without invitations: show participantsIds with empty initials.
-            // Flutter returns no participants in this case; this is a best-effort display only.
-            (planDoc.get("participantsIds") as? List<*>).orEmpty()
-                .filterIsInstance<String>()
-                .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i % 4) }
-        }
+        val participants = fetchGoingParticipants(goingIds)
         val totalCost = activities.sumOf { it.price.toDouble() }
         // Matches Flutter: 0 when no going participants, otherwise cost ÷ going count.
         val costPerPerson = if (goingIds.isNotEmpty() && totalCost > 0)
@@ -415,7 +407,12 @@ class PlanRepository(
                         }
                         cont.resume(Unit)
                     }
-                    .addOnFailureListener { cont.resume(Unit) }
+                    .addOnFailureListener {
+                        batch.forEach { id ->
+                            participants.add(Participant(id = id, initials = "?", avatarColorIndex = participants.size % 4))
+                        }
+                        cont.resume(Unit)
+                    }
             }
         }
         return participants
