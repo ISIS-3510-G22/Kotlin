@@ -22,7 +22,6 @@ import com.example.plansync.ui.SignUpScreen
 import com.example.plansync.ui.navigation.MainNavHost
 import com.example.plansync.ui.theme.PlanSyncTheme
 import com.example.plansync.data.FirebaseProvider
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.PersistentCacheSettings
 
@@ -56,7 +55,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             PlanSyncTheme {
 
-                var isLoggedIn by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser != null) }
+                var isLoggedIn by remember { mutableStateOf(FirebaseProvider.auth.currentUser != null) }
                 var isSigningUp by remember { mutableStateOf(false) }
 
                 when {

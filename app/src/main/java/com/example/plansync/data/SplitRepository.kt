@@ -1,17 +1,18 @@
 package com.example.plansync.data
 
 import com.example.plansync.model.Split
-import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.firestore
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-class SplitRepository {
+class SplitRepository(
+    private val db: FirebaseFirestore = FirebaseProvider.firestore,
+    private val auth: FirebaseAuth = FirebaseProvider.auth
+) {
 
-    private val auth = FirebaseAuth.getInstance()
-    private val plans = Firebase.firestore.collection("plans")
+    private val plans = db.collection("plans")
 
     suspend fun getMySplits(planId: String): Result<List<Split>> {
         val uid = auth.currentUser?.uid
