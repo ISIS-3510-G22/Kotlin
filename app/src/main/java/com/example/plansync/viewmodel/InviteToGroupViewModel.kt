@@ -6,6 +6,7 @@ import com.example.plansync.data.CrewRepository
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.model.Friend
 import com.example.plansync.model.Plan
+import com.example.plansync.model.RsvpStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,9 +57,14 @@ class InviteToGroupViewModel(
         }
     }
 
-    private fun sortBySharedPlans(friends: List<Friend>, plans: List<Plan>): List<Friend> =
-        friends.sortedBy { it.name.lowercase() }
-            .sortedByDescending { friend -> plans.count { plan -> plan.participants.any { it.id == friend.id } } }
+    private fun sortBySharedPlans(friends: List<Friend>, plans: List<Plan>): List<Friend> {
+        val myId = repository.currentUserId ?: return friends.sortedBy { it.name.lowercase() }
+        return friends.sortedBy { it.name.lowercase() }
+            .sortedByDescending { friend -> plans.count { plan -> isGoing(plan, myId) && isGoing(plan, friend.id) } }
+    }
+
+    private fun isGoing(plan: Plan, userId: String): Boolean =
+        plan.invitations.any { it.userId == userId && it.rsvp == RsvpStatus.GOING }
 
     private suspend fun loadPhotos() {
         val friendIds = _uiState.value.friends.map { it.id }

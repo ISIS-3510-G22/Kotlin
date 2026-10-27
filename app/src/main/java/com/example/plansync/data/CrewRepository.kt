@@ -26,6 +26,8 @@ class CrewRepository(
     private val groupMembers = db.collection("groupMembers")
     private val groupInvitations = db.collection("groupInvitations")
 
+    val currentUserId: String? get() = auth.currentUser?.uid
+
     suspend fun getGroups(): Result<List<Group>> {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
