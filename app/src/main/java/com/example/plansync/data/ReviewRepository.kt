@@ -2,6 +2,7 @@ package com.example.plansync.data
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.plansync.model.Review
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import java.util.Date
@@ -14,14 +15,19 @@ class ReviewRepository(
 ) {
 
     private val plans = db.collection("plans")
+    private val users = db.collection("users")
 
     suspend fun saveReview(planId: String, rating: Int, comment: String): Result<Unit> {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
+        val userName = getUserName(uid).getOrElse { return Result.failure(it) }
+
         val data = mapOf(
+            "userName" to userName,
             "rating" to rating,
-            "comment" to comment
+            "comment" to comment,
+            "createdAt" to Timestamp.now()
         )
 
         return suspendCancellableCoroutine { continuation ->
@@ -43,7 +49,8 @@ class ReviewRepository(
                     if (doc.exists()) {
                         val review = Review(
                             rating = doc.getLong("rating")?.toInt() ?: 0,
-                            comment = doc.getString("comment").orEmpty()
+                            comment = doc.getString("comment").orEmpty(),
+                            createdAt = doc.getTimestamp("createdAt")?.toDate()
                         )
                         continuation.resume(Result.success(review))
                     } else {
@@ -53,6 +60,16 @@ class ReviewRepository(
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
     }
+
+    private suspend fun getUserName(uid: String): Result<String> =
+        suspendCancellableCoroutine { continuation ->
+            users.document(uid).get()
+                .addOnSuccessListener { doc ->
+                    val fullName = "${doc.getString("name").orEmpty()} ${doc.getString("lastName").orEmpty()}".trim()
+                    continuation.resume(Result.success(fullName.ifBlank { doc.getString("username").orEmpty() }))
+                }
+                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }
 
     suspend fun getRatingsByTag(): Result<Map<String, List<Int>>> {
         val uid = auth.currentUser?.uid
