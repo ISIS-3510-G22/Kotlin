@@ -7,6 +7,7 @@ import com.example.plansync.model.Group
 import com.example.plansync.model.PaymentMethod
 import com.example.plansync.model.PaymentMethodType
 import com.example.plansync.model.User
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
@@ -21,6 +22,7 @@ class CrewRepository(
 
     private val groups = db.collection("groups")
     private val users = db.collection("users")
+    private val friendRequests = db.collection("friendRequests")
 
     suspend fun getGroups(): Result<List<Group>> {
         val uid = auth.currentUser?.uid
@@ -41,22 +43,23 @@ class CrewRepository(
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
-        return suspendCancellableCoroutine { continuation ->
-            users.document(uid).collection("friends")
-                .get()
-                .addOnSuccessListener { snapshot ->
-                    val friends = snapshot.documents.mapIndexed { index, doc ->
-                        Friend(
-                            id               = doc.id,
-                            name             = doc.getString("name").orEmpty(),
-                            email            = doc.getString("email").orEmpty(),
-                            avatarColorIndex = index
-                        )
-                    }
-                    continuation.resume(Result.success(friends))
-                }
-                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        val sent = getRequests("fromUserId", uid, "accepted").getOrElse { return Result.failure(it) }
+        val received = getRequests("toUserId", uid, "accepted").getOrElse { return Result.failure(it) }
+        val friendIds = (sent.map { it.getString("toUserId").orEmpty() } + received.map { it.getString("fromUserId").orEmpty() })
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        val friendUsers = getUsersByIds(friendIds).getOrElse { return Result.failure(it) }
+        val friends = friendUsers.mapIndexed { index, user ->
+            Friend(
+                id               = user.id,
+                name             = "${user.name} ${user.lastName}".trim(),
+                email            = user.email,
+                avatarColorIndex = index,
+                photoUrl         = user.photoUrl
+            )
         }
+        return Result.success(friends)
     }
 
     suspend fun getGroup(groupId: String): Result<Group> =
@@ -133,18 +136,25 @@ class CrewRepository(
     suspend fun sendFriendRequest(targetId: String): Result<Unit> {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
-        val me = getUser(uid).getOrElse { return Result.failure(it) }
+        if (targetId == uid) return Result.failure(Exception("You can't send a friend request to yourself."))
+
+        val sent = getRequestsBetween(uid, targetId).getOrElse { return Result.failure(it) }
+        val received = getRequestsBetween(targetId, uid).getOrElse { return Result.failure(it) }
+        val alreadyLinked = (sent + received).any {
+            val status = it.getString("status")
+            status == "pending" || status == "accepted"
+        }
+        if (alreadyLinked) return Result.failure(Exception("There is already a request or friendship with this user."))
 
         val data = mapOf(
-            "name" to me.name,
-            "lastName" to me.lastName,
-            "username" to me.username,
-            "email" to me.email
+            "fromUserId" to uid,
+            "toUserId" to targetId,
+            "sentOn" to Timestamp.now(),
+            "status" to "pending"
         )
 
         return suspendCancellableCoroutine { continuation ->
-            users.document(targetId).collection("friendRequests").document(uid)
-                .set(data)
+            friendRequests.add(data)
                 .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
@@ -154,53 +164,56 @@ class CrewRepository(
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
-        return suspendCancellableCoroutine { continuation ->
-            users.document(uid).collection("friendRequests")
+        val docs = getRequests("toUserId", uid, "pending").getOrElse { return Result.failure(it) }
+        val senderIds = docs.map { it.getString("fromUserId").orEmpty() }.filter { it.isNotBlank() }.distinct()
+        val senders = getUsersByIds(senderIds).getOrElse { return Result.failure(it) }.associateBy { it.id }
+
+        val requests = docs.mapNotNull { doc ->
+            val sender = senders[doc.getString("fromUserId").orEmpty()] ?: return@mapNotNull null
+            FriendRequest(
+                id         = doc.id,
+                fromUserId = sender.id,
+                name       = sender.name,
+                lastName   = sender.lastName,
+                username   = sender.username,
+                email      = sender.email,
+                photoUrl   = sender.photoUrl
+            )
+        }
+        return Result.success(requests)
+    }
+
+    suspend fun acceptFriendRequest(requestId: String): Result<Unit> = setRequestStatus(requestId, "accepted")
+
+    suspend fun denyFriendRequest(requestId: String): Result<Unit> = setRequestStatus(requestId, "denied")
+
+    private suspend fun setRequestStatus(requestId: String, status: String): Result<Unit> =
+        suspendCancellableCoroutine { continuation ->
+            friendRequests.document(requestId)
+                .update("status", status)
+                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
+                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }
+
+    private suspend fun getRequests(field: String, uid: String, status: String): Result<List<DocumentSnapshot>> =
+        suspendCancellableCoroutine { continuation ->
+            friendRequests
+                .whereEqualTo(field, uid)
+                .whereEqualTo("status", status)
                 .get()
-                .addOnSuccessListener { snapshot ->
-                    continuation.resume(Result.success(snapshot.documents.map { it.toFriendRequest() }))
-                }
+                .addOnSuccessListener { snapshot -> continuation.resume(Result.success(snapshot.documents)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
-    }
 
-    suspend fun acceptFriendRequest(request: FriendRequest): Result<Unit> {
-        val uid = auth.currentUser?.uid
-            ?: return Result.failure(Exception("No active session."))
-        val me = getUser(uid).getOrElse { return Result.failure(it) }
-
-        val friendForMe = mapOf(
-            "name" to "${request.name} ${request.lastName}".trim(),
-            "email" to request.email
-        )
-        val friendForThem = mapOf(
-            "name" to "${me.name} ${me.lastName}".trim(),
-            "email" to me.email
-        )
-
-        val batch = db.batch()
-        batch.set(users.document(uid).collection("friends").document(request.id), friendForMe)
-        batch.set(users.document(request.id).collection("friends").document(uid), friendForThem)
-        batch.delete(users.document(uid).collection("friendRequests").document(request.id))
-
-        return suspendCancellableCoroutine { continuation ->
-            batch.commit()
-                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
+    private suspend fun getRequestsBetween(fromUserId: String, toUserId: String): Result<List<DocumentSnapshot>> =
+        suspendCancellableCoroutine { continuation ->
+            friendRequests
+                .whereEqualTo("fromUserId", fromUserId)
+                .whereEqualTo("toUserId", toUserId)
+                .get()
+                .addOnSuccessListener { snapshot -> continuation.resume(Result.success(snapshot.documents)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
-    }
-
-    suspend fun denyFriendRequest(requestId: String): Result<Unit> {
-        val uid = auth.currentUser?.uid
-            ?: return Result.failure(Exception("No active session."))
-
-        return suspendCancellableCoroutine { continuation ->
-            users.document(uid).collection("friendRequests").document(requestId)
-                .delete()
-                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
-                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-        }
-    }
 
     suspend fun getGroupInvites(): Result<List<Group>> {
         val uid = auth.currentUser?.uid
@@ -296,12 +309,4 @@ class CrewRepository(
             type   = if (type.contains("venmo", ignoreCase = true)) PaymentMethodType.VENMO else PaymentMethodType.BANK
         )
     }
-
-    private fun DocumentSnapshot.toFriendRequest() = FriendRequest(
-        id       = id,
-        name     = getString("name").orEmpty(),
-        lastName = getString("lastName").orEmpty(),
-        username = getString("username").orEmpty(),
-        email    = getString("email").orEmpty()
-    )
 }

@@ -32,28 +32,14 @@ class FriendRequestsViewModel(
             repository.getFriendRequests()
                 .onSuccess { requests -> _uiState.update { it.copy(requests = requests, isLoading = false) } }
                 .onFailure { error -> _uiState.update { it.copy(errorMessage = error.message, isLoading = false) } }
-
-            loadPhotos()
         }
-    }
-
-    private suspend fun loadPhotos() {
-        val requestIds = _uiState.value.requests.map { it.id }
-        if (requestIds.isEmpty()) return
-
-        repository.getPhotoUrls(requestIds)
-            .onSuccess { photos ->
-                _uiState.update { state ->
-                    state.copy(requests = state.requests.map { it.copy(photoUrl = photos[it.id].orEmpty()) })
-                }
-            }
     }
 
     fun accept(request: FriendRequest) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, actionError = null) }
 
-            repository.acceptFriendRequest(request)
+            repository.acceptFriendRequest(request.id)
                 .onSuccess { removeRequest(request.id) }
                 .onFailure { error -> _uiState.update { it.copy(actionError = error.message) } }
 
