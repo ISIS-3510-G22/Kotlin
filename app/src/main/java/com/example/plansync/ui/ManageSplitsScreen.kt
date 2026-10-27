@@ -138,7 +138,7 @@ fun ManageSplitsScreen(
                         ) {
                             items(uiState.splits) { split ->
                                 SplitCard(
-                                    name = uiState.names[split.creditorId] ?: "Unknown",
+                                    name = uiState.names[split.personId] ?: "Unknown",
                                     split = split,
                                     enabled = !uiState.isSaving,
                                     onPaidChange = { paid -> viewModel.onPaidChange(planId, split, paid) },

@@ -83,15 +83,7 @@ class PlanRepository(
             else -> PlanStatus.CONFIRMED
         }
         val goingIds = invitations.filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
-        val participants = if (goingIds.isNotEmpty()) {
-            fetchGoingParticipants(goingIds)
-        } else {
-            // Fallback for legacy plans without invitations: show participantsIds with empty initials.
-            // Flutter returns no participants in this case; this is a best-effort display only.
-            (planDoc.get("participantsIds") as? List<*>).orEmpty()
-                .filterIsInstance<String>()
-                .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i % 4) }
-        }
+        val participants = fetchGoingParticipants(goingIds)
         val totalCost = activities.sumOf { it.price.toDouble() }
         // Matches Flutter: 0 when no going participants, otherwise cost ÷ going count.
         val costPerPerson = if (goingIds.isNotEmpty() && totalCost > 0)
@@ -269,41 +261,73 @@ class PlanRepository(
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
-        return suspendCancellableCoroutine { continuation ->
+        val docs = suspendCancellableCoroutine<Result<List<DocumentSnapshot>>> { continuation ->
             db.collection("plans")
                 .whereArrayContains("participantsIds", uid)
                 .get()
-                .addOnSuccessListener { snapshot ->
-                    val plans = snapshot.documents.map { doc ->
-                        val dateTime = doc.getTimestamp("date")?.toDate()
-                        val invitations = parseInvitations(doc)
-                        val myRsvp = invitations.find { it.userId == uid }?.rsvp
-                        val status = when {
-                            myRsvp == RsvpStatus.INVITED -> PlanStatus.PENDING_INVITE
-                            dateTime != null && dateTime.before(Date()) -> PlanStatus.PAST
-                            else -> PlanStatus.CONFIRMED
-                        }
-                        Plan(
-                            id = doc.id,
-                            title = doc.getString("name").orEmpty(),
-                            date = dateTime
-                                ?.let { SimpleDateFormat("MMM d", Locale.US).format(it) }
-                                .orEmpty(),
-                            estimatedCostPerPerson = 0,
-                            participants = (doc.get("participantsIds") as? List<*>).orEmpty()
-                                .filterIsInstance<String>()
-                                .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i) },
-                            activities = emptyList(),
-                            status = status,
-                            activityIds = (doc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>(),
-                            dateTime = dateTime,
-                            invitations = invitations
-                        )
-                    }
-                    continuation.resume(Result.success(plans))
-                }
+                .addOnSuccessListener { snapshot -> continuation.resume(Result.success(snapshot.documents)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }.getOrElse { return Result.failure(it) }
+
+        val allGoingIds = docs.flatMap { doc ->
+            parseInvitations(doc).filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
+        }.distinct()
+        val users = fetchUsersByIds(allGoingIds).getOrDefault(emptyMap())
+
+        val plans = docs.mapNotNull { doc ->
+            val dateTime = doc.getTimestamp("date")?.toDate()
+            val invitations = parseInvitations(doc)
+            val myRsvp = invitations.find { it.userId == uid }?.rsvp
+            val isPast = dateTime != null && dateTime.before(Date())
+            val status = when {
+                isPast && myRsvp == RsvpStatus.GOING -> PlanStatus.PAST
+                isPast -> return@mapNotNull null
+                myRsvp == RsvpStatus.INVITED -> PlanStatus.PENDING_INVITE
+                else -> PlanStatus.CONFIRMED
+            }
+            val goingIds = invitations.filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
+            val participants = goingIds.mapIndexed { i, id ->
+                val user = users[id]
+                Participant(
+                    id = id,
+                    initials = if (user == null) "?" else buildInitials(user.getString("name").orEmpty(), user.getString("lastName").orEmpty()),
+                    avatarColorIndex = i % 4,
+                    photoUrl = user?.getString("photoUrl").orEmpty()
+                )
+            }
+            Plan(
+                id = doc.id,
+                title = doc.getString("name").orEmpty(),
+                date = dateTime
+                    ?.let { SimpleDateFormat("MMM d", Locale.US).format(it) }
+                    .orEmpty(),
+                estimatedCostPerPerson = 0,
+                participants = participants,
+                activities = emptyList(),
+                status = status,
+                activityIds = (doc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>(),
+                dateTime = dateTime,
+                invitations = invitations
+            )
         }
+        return Result.success(plans)
+    }
+
+    private suspend fun fetchUsersByIds(ids: List<String>): Result<Map<String, DocumentSnapshot>> {
+        val users = mutableMapOf<String, DocumentSnapshot>()
+        for (chunk in ids.chunked(10)) {
+            val docs = suspendCancellableCoroutine<Result<List<DocumentSnapshot>>> { continuation ->
+                db.collection("users")
+                    .whereIn(FieldPath.documentId(), chunk)
+                    .get()
+                    .addOnSuccessListener { snapshot -> continuation.resume(Result.success(snapshot.documents)) }
+                    .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+            }.getOrElse { return Result.failure(it) }
+            for (doc in docs) {
+                users[doc.id] = doc
+            }
+        }
+        return Result.success(users)
     }
 
     /**
@@ -383,7 +407,12 @@ class PlanRepository(
                         }
                         cont.resume(Unit)
                     }
-                    .addOnFailureListener { cont.resume(Unit) }
+                    .addOnFailureListener {
+                        batch.forEach { id ->
+                            participants.add(Participant(id = id, initials = "?", avatarColorIndex = participants.size % 4))
+                        }
+                        cont.resume(Unit)
+                    }
             }
         }
         return participants

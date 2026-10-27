@@ -22,7 +22,6 @@ class MyPlansViewModel(
 
     data class UiState(
         val allPlans: List<Plan> = emptyList(),
-        val invites: List<Plan> = emptyList(),
         val selectedTab: PlanStatus = PlanStatus.CONFIRMED,
         val filteredPlans: List<Plan> = emptyList(),
         val isLoading: Boolean = false,
@@ -51,15 +50,9 @@ class MyPlansViewModel(
                 .onSuccess { plans -> _uiState.update { it.copy(allPlans = plans) } }
                 .onFailure { error -> _uiState.update { it.copy(errorMessage = error.message) } }
 
-            // invites are now embedded in allPlans via participantsIds + rsvp == INVITED
-            val pendingInvites = _uiState.value.allPlans.filter { it.status == PlanStatus.PENDING_INVITE }
-            if (pendingInvites.isNotEmpty()) {
-                _uiState.update { it.copy(invites = pendingInvites) }
-            }
-
             if (!initialTabChosen) {
                 initialTabChosen = true
-                if (_uiState.value.invites.isNotEmpty()) {
+                if (_uiState.value.allPlans.any { it.status == PlanStatus.PENDING_INVITE }) {
                     _uiState.update { it.copy(selectedTab = PlanStatus.PENDING_INVITE) }
                 }
             }
@@ -67,7 +60,7 @@ class MyPlansViewModel(
             _uiState.update { current ->
                 current.copy(
                     isLoading = false,
-                    filteredPlans = plansForTab(current.allPlans + current.invites, current.selectedTab)
+                    filteredPlans = plansForTab(current.allPlans, current.selectedTab)
                 )
             }
         }
@@ -106,7 +99,7 @@ class MyPlansViewModel(
             current.copy(
                 selectedTab = tab,
                 respondError = null,
-                filteredPlans = plansForTab(current.allPlans + current.invites, tab)
+                filteredPlans = plansForTab(current.allPlans, tab)
             )
         }
     }

@@ -6,6 +6,7 @@ import com.example.plansync.data.CrewRepository
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.model.Friend
 import com.example.plansync.model.Plan
+import com.example.plansync.model.RsvpStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +33,12 @@ class InviteToGroupViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-            val group = repository.getGroup(groupId).getOrElse { error ->
+            val memberIds = repository.getMemberIds(listOf(groupId)).getOrElse { error ->
+                _uiState.update { it.copy(errorMessage = error.message, isLoading = false) }
+                return@launch
+            }[groupId].orEmpty()
+
+            val pendingIds = repository.getPendingInviteeIds(groupId).getOrElse { error ->
                 _uiState.update { it.copy(errorMessage = error.message, isLoading = false) }
                 return@launch
             }
@@ -41,7 +47,7 @@ class InviteToGroupViewModel(
 
             repository.getFriends()
                 .onSuccess { friends ->
-                    val invitable = friends.filter { it.id !in group.memberIds && it.id !in group.invitedIds }
+                    val invitable = friends.filter { it.id !in memberIds && it.id !in pendingIds }
                     val sorted = if (plans == null) invitable else sortBySharedPlans(invitable, plans)
                     _uiState.update { it.copy(friends = sorted, isLoading = false) }
                 }
@@ -51,9 +57,14 @@ class InviteToGroupViewModel(
         }
     }
 
-    private fun sortBySharedPlans(friends: List<Friend>, plans: List<Plan>): List<Friend> =
-        friends.sortedBy { it.name.lowercase() }
-            .sortedByDescending { friend -> plans.count { plan -> plan.participants.any { it.id == friend.id } } }
+    private fun sortBySharedPlans(friends: List<Friend>, plans: List<Plan>): List<Friend> {
+        val myId = repository.currentUserId ?: return friends.sortedBy { it.name.lowercase() }
+        return friends.sortedBy { it.name.lowercase() }
+            .sortedByDescending { friend -> plans.count { plan -> isGoing(plan, myId) && isGoing(plan, friend.id) } }
+    }
+
+    private fun isGoing(plan: Plan, userId: String): Boolean =
+        plan.invitations.any { it.userId == userId && it.rsvp == RsvpStatus.GOING }
 
     private suspend fun loadPhotos() {
         val friendIds = _uiState.value.friends.map { it.id }

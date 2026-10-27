@@ -22,6 +22,7 @@ class MyCrewViewModel(
         val groups: List<Group> = emptyList(),
         val friends: List<Friend> = emptyList(),
         val groupMembers: Map<String, User> = emptyMap(),
+        val memberIdsByGroup: Map<String, List<String>> = emptyMap(),
         val selectedTab: CrewTab = CrewTab.GROUPS,
         val isLoading: Boolean = false,
         val groupsError: String? = null,
@@ -74,7 +75,13 @@ class MyCrewViewModel(
     }
 
     private suspend fun loadGroupMembers() {
-        val memberIds = _uiState.value.groups.flatMap { it.memberIds.take(3) }.distinct()
+        val groupIds = _uiState.value.groups.map { it.id }
+        if (groupIds.isEmpty()) return
+
+        val memberIdsByGroup = repository.getMemberIds(groupIds).getOrElse { return }
+        _uiState.update { it.copy(memberIdsByGroup = memberIdsByGroup) }
+
+        val memberIds = memberIdsByGroup.values.flatMap { it.take(3) }.distinct()
         if (memberIds.isEmpty()) return
 
         repository.getUsersByIds(memberIds)
