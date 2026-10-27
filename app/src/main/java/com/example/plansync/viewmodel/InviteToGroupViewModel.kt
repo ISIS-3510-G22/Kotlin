@@ -32,7 +32,12 @@ class InviteToGroupViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-            val group = repository.getGroup(groupId).getOrElse { error ->
+            val memberIds = repository.getMemberIds(listOf(groupId)).getOrElse { error ->
+                _uiState.update { it.copy(errorMessage = error.message, isLoading = false) }
+                return@launch
+            }[groupId].orEmpty()
+
+            val pendingIds = repository.getPendingInviteeIds(groupId).getOrElse { error ->
                 _uiState.update { it.copy(errorMessage = error.message, isLoading = false) }
                 return@launch
             }
@@ -41,7 +46,7 @@ class InviteToGroupViewModel(
 
             repository.getFriends()
                 .onSuccess { friends ->
-                    val invitable = friends.filter { it.id !in group.memberIds && it.id !in group.invitedIds }
+                    val invitable = friends.filter { it.id !in memberIds && it.id !in pendingIds }
                     val sorted = if (plans == null) invitable else sortBySharedPlans(invitable, plans)
                     _uiState.update { it.copy(friends = sorted, isLoading = false) }
                 }

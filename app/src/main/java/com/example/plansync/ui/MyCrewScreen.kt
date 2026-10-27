@@ -83,6 +83,7 @@ fun MyCrewScreen(
                         GroupsContent(
                             groups = uiState.groups,
                             groupMembers = uiState.groupMembers,
+                            memberIdsByGroup = uiState.memberIdsByGroup,
                             errorMessage = uiState.groupsError,
                             onGroupSelected = onGroupSelected
                         )
@@ -120,6 +121,7 @@ fun MyCrewScreen(
 private fun GroupsContent(
     groups: List<Group>,
     groupMembers: Map<String, User>,
+    memberIdsByGroup: Map<String, List<String>>,
     errorMessage: String?,
     onGroupSelected: (String) -> Unit
 ) {
@@ -134,6 +136,7 @@ private fun GroupsContent(
                 items(groups) { group ->
                     GroupCard(
                         group = group,
+                        memberIds = memberIdsByGroup[group.id].orEmpty(),
                         groupMembers = groupMembers,
                         onClick = { onGroupSelected(group.id) },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -268,6 +271,7 @@ private fun CrewActionButton(label: String, onClick: () -> Unit) {
 @Composable
 private fun GroupCard(
     group: Group,
+    memberIds: List<String>,
     groupMembers: Map<String, User>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -280,7 +284,7 @@ private fun GroupCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            GroupAvatarCluster(memberIds = group.memberIds, groupMembers = groupMembers)
+            GroupAvatarCluster(memberIds = memberIds, groupMembers = groupMembers)
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = group.name,
@@ -289,7 +293,7 @@ private fun GroupCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "${group.memberIds.size} Members",
+                text = "${memberIds.size} Members",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFF888888)
             )

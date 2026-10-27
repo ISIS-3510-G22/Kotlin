@@ -73,6 +73,7 @@ fun GroupDetailScreen(
                 uiState.group != null -> {
                     GroupDetailContent(
                         group = uiState.group!!,
+                        memberIds = uiState.memberIds,
                         members = uiState.members,
                         onInvite = { onInvite(groupId) }
                     )
@@ -83,7 +84,7 @@ fun GroupDetailScreen(
 }
 
 @Composable
-private fun GroupDetailContent(group: Group, members: Map<String, User>, onInvite: () -> Unit) {
+private fun GroupDetailContent(group: Group, memberIds: List<String>, members: Map<String, User>, onInvite: () -> Unit) {
     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 32.dp)) {
         Text(
             text = group.name,
@@ -92,7 +93,7 @@ private fun GroupDetailContent(group: Group, members: Map<String, User>, onInvit
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "${group.memberIds.size} members",
+            text = "${memberIds.size} members",
             style = MaterialTheme.typography.titleMedium,
             color = Color(0xFF888888)
         )
@@ -106,7 +107,7 @@ private fun GroupDetailContent(group: Group, members: Map<String, User>, onInvit
         }
         Spacer(modifier = Modifier.height(16.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            itemsIndexed(group.memberIds) { index, memberId ->
+            itemsIndexed(memberIds) { index, memberId ->
                 MemberTile(member = members[memberId], colorIndex = index)
             }
             item {
