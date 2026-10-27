@@ -42,7 +42,7 @@ class SplitRepository(
         val data = mapOf(
             "fromId" to uid,
             "toId" to toId,
-            "amount" to amount
+            "amount" to Math.round(amount * 100) / 100.0
         )
 
         return suspendCancellableCoroutine { continuation ->
