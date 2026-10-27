@@ -50,16 +50,7 @@ import com.example.plansync.ui.theme.Coral
 import com.example.plansync.ui.theme.CoralLight
 import com.example.plansync.viewmodel.LoginViewModel
 
-/**
- * UI layer — Composable screen for user login.
- *
- * Strictly follows MVVM: reads state only from [LoginViewModel] via
- * collectAsStateWithLifecycle() (Observer pattern) and calls only ViewModel
- * functions. Never touches AuthRepository directly.
- *
- * @param viewModel      Injected via viewModel() factory; can be overridden in tests.
- * @param onLoginSuccess Callback triggered once authentication succeeds.
- */
+
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel = viewModel(),
