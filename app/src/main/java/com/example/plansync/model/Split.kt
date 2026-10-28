@@ -1,8 +1,8 @@
 package com.example.plansync.model
 
 data class Split(
-    val id: String,
-    val creditorId: String,
+    val personId: String,
     val amount: Double,
+    val paidSoFar: Double,
     val paid: Boolean
 )

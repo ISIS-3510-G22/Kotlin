@@ -1,5 +1,6 @@
 package com.example.plansync.data
 
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Date
 
@@ -14,19 +15,18 @@ import java.util.Date
  * Each ViewModel injects this repository to log its own events.
  */
 class AnalyticsRepository(
-    private val db: FirebaseFirestore = FirebaseProvider.firestore
+    private val db: FirebaseFirestore = FirebaseProvider.firestore,
+    private val auth: FirebaseAuth = FirebaseProvider.auth
 ) {
 
-
-    /**
-     * Logs a named event with an optional [planId] and current timestamp.
-     * Written to Firestore collection "events" asynchronously.
-     */
-    fun logEvent(type: String, planId: String? = null) {
+    /** Logs a named event. userId is always the current user; inviteeId is set on invite_sent. */
+    fun logEvent(type: String, planId: String? = null, inviteeId: String? = null) {
         val event = hashMapOf(
-            "type"      to type,
-            "planId"    to planId,
-            "timestamp" to Date()
+            "type"       to type,
+            "planId"     to planId,
+            "userId"     to auth.currentUser?.uid,
+            "inviteeId"  to inviteeId,
+            "timestamp"  to Date()
         )
         db.collection("events")
             .add(event)

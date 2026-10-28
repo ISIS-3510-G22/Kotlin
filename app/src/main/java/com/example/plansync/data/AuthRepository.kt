@@ -8,32 +8,13 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
-/**
- * Data layer — Repository pattern.
- * Single source of truth for all authentication operations.
- *
- * The ViewModel calls this class; UI composables never interact with it directly.
- * Swapping the auth backend (e.g. moving to a custom server) only requires
- * changing this file — LoginViewModel and LoginScreen remain untouched.
- */
+
 class AuthRepository(
     private val db: FirebaseFirestore = FirebaseProvider.firestore,
     private val auth: FirebaseAuth = FirebaseProvider.auth
 ) {
 
-    // FirebaseAuth instance — entry point for all Firebase Auth operations
 
-    /**
-     * Attempts to sign in with the given [email] and [password] via Firebase Auth.
-     *
-     * Uses [suspendCancellableCoroutine] to bridge Firebase's callback-based
-     * Task API into a suspend function compatible with Kotlin coroutines.
-     * The coroutine is cancelled automatically if the caller's scope is cancelled
-     * (e.g. user navigates away before the response arrives).
-     *
-     * @return [Result.success] wrapping a [User] on valid credentials,
-     *         or [Result.failure] with a descriptive exception on error.
-     */
     suspend fun login(email: String, password: String): Result<User> =
         suspendCancellableCoroutine { continuation ->
             auth.signInWithEmailAndPassword(email, password)
@@ -54,22 +35,16 @@ class AuthRepository(
                     }
                 }
                 .addOnFailureListener { exception ->
-                    // Firebase provides descriptive messages for wrong password,
-                    // user not found, network errors, etc.
                     continuation.resume(Result.failure(Exception(exception.message ?: "Authentication failed.")))
                 }
         }
 
-    /**
-     * Signs out the currently authenticated user.
-     * Called when navigating to a logout flow (future milestone).
-     */
+
     fun signOut() {
         auth.signOut()
     }
 
 
-    //Creates profile in Firebase
 
     suspend fun signUp(name: String, lastName:String, username: String, phone: String, email: String,
                         password: String): Result<User> = suspendCancellableCoroutine { continuation ->
@@ -95,7 +70,6 @@ class AuthRepository(
                         }
                     }
 
-     //Returns the current user or null if there's no active session.
     suspend fun getCurrentUser(): User? {
         val firebaseUser = auth.currentUser ?: return null
         val fallback = User(

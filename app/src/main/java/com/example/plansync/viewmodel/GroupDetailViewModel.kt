@@ -17,6 +17,7 @@ class GroupDetailViewModel(
 
     data class UiState(
         val group: Group? = null,
+        val memberIds: List<String> = emptyList(),
         val members: Map<String, User> = emptyMap(),
         val isLoading: Boolean = false,
         val errorMessage: String? = null
@@ -29,11 +30,17 @@ class GroupDetailViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-            repository.getGroup(groupId)
-                .onSuccess { group -> _uiState.update { it.copy(group = group, isLoading = false) } }
-                .onFailure { error -> _uiState.update { it.copy(errorMessage = error.message, isLoading = false) } }
+            val group = repository.getGroup(groupId).getOrElse { error ->
+                _uiState.update { it.copy(errorMessage = error.message, isLoading = false) }
+                return@launch
+            }
 
-            val memberIds = _uiState.value.group?.memberIds.orEmpty()
+            val memberIds = repository.getMemberIds(listOf(groupId)).getOrElse { error ->
+                _uiState.update { it.copy(errorMessage = error.message, isLoading = false) }
+                return@launch
+            }[groupId].orEmpty()
+
+            _uiState.update { it.copy(group = group, memberIds = memberIds, isLoading = false) }
             if (memberIds.isEmpty()) return@launch
 
             repository.getUsersByIds(memberIds)

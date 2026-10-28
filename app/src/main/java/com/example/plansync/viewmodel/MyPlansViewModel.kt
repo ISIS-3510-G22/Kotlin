@@ -5,9 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.ReviewRepository
 import com.example.plansync.data.WeatherRepository
-import com.example.plansync.model.InviteResponse
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
+import com.example.plansync.model.RsvpStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,7 +22,6 @@ class MyPlansViewModel(
 
     data class UiState(
         val allPlans: List<Plan> = emptyList(),
-        val invites: List<Plan> = emptyList(),
         val selectedTab: PlanStatus = PlanStatus.CONFIRMED,
         val filteredPlans: List<Plan> = emptyList(),
         val isLoading: Boolean = false,
@@ -51,13 +50,9 @@ class MyPlansViewModel(
                 .onSuccess { plans -> _uiState.update { it.copy(allPlans = plans) } }
                 .onFailure { error -> _uiState.update { it.copy(errorMessage = error.message) } }
 
-            repository.getMyInvites()
-                .onSuccess { invites -> _uiState.update { it.copy(invites = invites) } }
-                .onFailure { error -> _uiState.update { it.copy(invitesError = error.message) } }
-
             if (!initialTabChosen) {
                 initialTabChosen = true
-                if (_uiState.value.invites.isNotEmpty()) {
+                if (_uiState.value.allPlans.any { it.status == PlanStatus.PENDING_INVITE }) {
                     _uiState.update { it.copy(selectedTab = PlanStatus.PENDING_INVITE) }
                 }
             }
@@ -65,7 +60,7 @@ class MyPlansViewModel(
             _uiState.update { current ->
                 current.copy(
                     isLoading = false,
-                    filteredPlans = plansForTab(current.allPlans + current.invites, current.selectedTab)
+                    filteredPlans = plansForTab(current.allPlans, current.selectedTab)
                 )
             }
         }
@@ -104,7 +99,7 @@ class MyPlansViewModel(
             current.copy(
                 selectedTab = tab,
                 respondError = null,
-                filteredPlans = plansForTab(current.allPlans + current.invites, tab)
+                filteredPlans = plansForTab(current.allPlans, tab)
             )
         }
     }
@@ -118,14 +113,14 @@ class MyPlansViewModel(
     }
 
     fun onInviteGoing() {
-        respondToInvite(InviteResponse.GOING)
+        respondToInvite(RsvpStatus.GOING)
     }
 
     fun onInviteCantMake() {
-        respondToInvite(InviteResponse.CANT_MAKE)
+        respondToInvite(RsvpStatus.NOT_GOING)
     }
 
-    private fun respondToInvite(response: InviteResponse) {
+    private fun respondToInvite(status: RsvpStatus) {
         val invite = _uiState.value.selectedInvite
         if (invite == null) {
             return
@@ -133,7 +128,7 @@ class MyPlansViewModel(
         _uiState.update { it.copy(selectedInvite = null) }
 
         viewModelScope.launch {
-            repository.respondToInvite(invite.id, response)
+            repository.setRsvp(invite.id, status)
                 .onSuccess { loadPlans() }
                 .onFailure { error -> _uiState.update { it.copy(respondError = error.message) } }
         }

@@ -15,8 +15,12 @@ data class Plan(
     val planType: String = "",
     val activityIds: List<String> = emptyList(),
     val dateTime: Date? = null,
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val invitations: List<Invitation> = emptyList()
 ) {
+    /** Returns this user's RSVP status, or null if they have no invitation entry. */
+    fun rsvpFor(uid: String): RsvpStatus? = invitations.find { it.userId == uid }?.rsvp
+
     val activityCount: Int get() = maxOf(activities.size, activityIds.size)
 
     val priceTier: String get() = when {

@@ -3,13 +3,15 @@ package com.example.plansync.data
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
-import com.example.plansync.model.InviteResponse
+import com.example.plansync.model.Invitation
 import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
+import com.example.plansync.model.RsvpStatus
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -48,7 +50,7 @@ class PlanRepository(
                 "participantsIds"  to listOf(uid),
                 "activityIds"      to activityIds,
                 "tags"             to tags,
-                "invitations"      to emptyList<String>()
+                "invitations"      to listOf(mapOf("userId" to uid, "rsvp" to "going"))
             )
             db.collection("plans").add(data)
                 .addOnSuccessListener { ref -> continuation.resume(Result.success(ref.id)) }
@@ -71,22 +73,35 @@ class PlanRepository(
             fetchActivity(actId)?.let { activities.add(it) }
         }
 
-        val tags = (planDoc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
+        val uid = auth.currentUser?.uid
+        val planTags = (planDoc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
+        val invitations = parseInvitations(planDoc)
+        val planDate = planDoc.getTimestamp("date")?.toDate()
+        val status = when {
+            uid != null && invitations.find { it.userId == uid }?.rsvp == RsvpStatus.INVITED -> PlanStatus.PENDING_INVITE
+            planDate != null && planDate.before(Date()) -> PlanStatus.PAST
+            else -> PlanStatus.CONFIRMED
+        }
+        val goingIds = invitations.filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
+        val participants = fetchGoingParticipants(goingIds)
+        val totalCost = activities.sumOf { it.price.toDouble() }
+        // Matches Flutter: 0 when no going participants, otherwise cost ÷ going count.
+        val costPerPerson = if (goingIds.isNotEmpty() && totalCost > 0)
+            (totalCost / goingIds.size).toInt() else 0
         return Result.success(
             Plan(
                 id = planDoc.id,
                 title = planDoc.getString("name").orEmpty(),
-                date = planDoc.getTimestamp("date")
-                    ?.let { SimpleDateFormat("MMM d, yyyy", Locale.US).format(it.toDate()) }
+                date = planDate
+                    ?.let { SimpleDateFormat("MMM d, yyyy", Locale.US).format(it) }
                     .orEmpty(),
-                estimatedCostPerPerson = activities.sumOf { it.price },
-                participants = (planDoc.get("participantsIds") as? List<*>).orEmpty()
-                    .filterIsInstance<String>()
-                    .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i % 5) },
+                estimatedCostPerPerson = costPerPerson,
+                participants = participants,
                 activities = activities,
-                status = PlanStatus.CONFIRMED,
+                status = status,
                 activityIds = activityIds,
-                category = tags.firstOrNull().orEmpty()
+                category = planTags.firstOrNull().orEmpty(),
+                invitations = invitations
             )
         )
     }
@@ -96,16 +111,17 @@ class PlanRepository(
             db.collection("activities").document(activityId).get()
                 .addOnSuccessListener { doc ->
                     if (!doc.exists()) { continuation.resume(null); return@addOnSuccessListener }
-                    val tags = (doc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
+                    val actTags = (doc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
                     continuation.resume(
                         Activity(
                             id = doc.id,
                             name = doc.getString("name").orEmpty(),
-                            category = tags.firstOrNull().orEmpty(),
+                            category = actTags.firstOrNull().orEmpty(),
                             description = doc.getString("notes").orEmpty(),
                             address = doc.getString("address").orEmpty(),
                             iconType = ActivityIcon.DEFAULT,
-                            price = (doc.getDouble("expectedPrice") ?: 0.0).toInt()
+                            price = (doc.getDouble("expectedPrice") ?: 0.0).toInt(),
+                            tags = actTags
                         )
                     )
                 }
@@ -245,63 +261,168 @@ class PlanRepository(
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
-        return suspendCancellableCoroutine { continuation ->
+        val docs = suspendCancellableCoroutine<Result<List<DocumentSnapshot>>> { continuation ->
             db.collection("plans")
                 .whereArrayContains("participantsIds", uid)
                 .get()
-                .addOnSuccessListener { snapshot ->
-                    val plans = snapshot.documents.map { doc ->
-                        val dateTime = doc.getTimestamp("date")?.toDate()
-                        Plan(
-                            id = doc.id,
-                            title = doc.getString("name").orEmpty(),
-                            date = dateTime
-                                ?.let { SimpleDateFormat("MMM d", Locale.US).format(it) }
-                                .orEmpty(),
-                            estimatedCostPerPerson = 0,
-                            participants = (doc.get("participantsIds") as? List<*>).orEmpty()
-                                .filterIsInstance<String>()
-                                .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i) },
-                            activities = emptyList(),
-                            status = if (dateTime != null && dateTime.before(Date())) PlanStatus.PAST else PlanStatus.CONFIRMED,
-                            activityIds = (doc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>(),
-                            dateTime = dateTime
-                        )
-                    }
-                    continuation.resume(Result.success(plans))
-                }
+                .addOnSuccessListener { snapshot -> continuation.resume(Result.success(snapshot.documents)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+        }.getOrElse { return Result.failure(it) }
+
+        val allGoingIds = docs.flatMap { doc ->
+            parseInvitations(doc).filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
+        }.distinct()
+        val users = fetchUsersByIds(allGoingIds).getOrDefault(emptyMap())
+
+        val plans = docs.mapNotNull { doc ->
+            val dateTime = doc.getTimestamp("date")?.toDate()
+            val invitations = parseInvitations(doc)
+            val myRsvp = invitations.find { it.userId == uid }?.rsvp
+            val isPast = dateTime != null && dateTime.before(Date())
+            val status = when {
+                isPast && myRsvp == RsvpStatus.GOING -> PlanStatus.PAST
+                isPast -> return@mapNotNull null
+                myRsvp == RsvpStatus.INVITED -> PlanStatus.PENDING_INVITE
+                else -> PlanStatus.CONFIRMED
+            }
+            val goingIds = invitations.filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
+            val participants = goingIds.mapIndexed { i, id ->
+                val user = users[id]
+                Participant(
+                    id = id,
+                    initials = if (user == null) "?" else buildInitials(user.getString("name").orEmpty(), user.getString("lastName").orEmpty()),
+                    avatarColorIndex = i % 4,
+                    photoUrl = user?.getString("photoUrl").orEmpty()
+                )
+            }
+            Plan(
+                id = doc.id,
+                title = doc.getString("name").orEmpty(),
+                date = dateTime
+                    ?.let { SimpleDateFormat("MMM d", Locale.US).format(it) }
+                    .orEmpty(),
+                estimatedCostPerPerson = 0,
+                participants = participants,
+                activities = emptyList(),
+                status = status,
+                activityIds = (doc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>(),
+                dateTime = dateTime,
+                invitations = invitations
+            )
+        }
+        return Result.success(plans)
+    }
+
+    private suspend fun fetchUsersByIds(ids: List<String>): Result<Map<String, DocumentSnapshot>> {
+        val users = mutableMapOf<String, DocumentSnapshot>()
+        for (chunk in ids.chunked(10)) {
+            val docs = suspendCancellableCoroutine<Result<List<DocumentSnapshot>>> { continuation ->
+                db.collection("users")
+                    .whereIn(FieldPath.documentId(), chunk)
+                    .get()
+                    .addOnSuccessListener { snapshot -> continuation.resume(Result.success(snapshot.documents)) }
+                    .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+            }.getOrElse { return Result.failure(it) }
+            for (doc in docs) {
+                users[doc.id] = doc
+            }
+        }
+        return Result.success(users)
+    }
+
+    /**
+     * Tolerant parser: maps → parsed normally, plain strings → INVITED with null invitedAt,
+     * unknown rsvp values or malformed entries are skipped.
+     */
+    private fun parseInvitations(doc: DocumentSnapshot): List<Invitation> {
+        val raw = (doc.get("invitations") as? List<*>).orEmpty()
+        return raw.mapNotNull { entry ->
+            when {
+                entry is Map<*, *> -> {
+                    val userId = entry["userId"] as? String ?: return@mapNotNull null
+                    val rsvp = RsvpStatus.from(entry["rsvp"] as? String) ?: return@mapNotNull null
+                    val invitedAt = (entry["invitedAt"] as? Timestamp)?.toDate()
+                    Invitation(userId = userId, rsvp = rsvp, invitedAt = invitedAt)
+                }
+                entry is String -> Invitation(userId = entry, rsvp = RsvpStatus.INVITED, invitedAt = null)
+                else -> null
+            }
         }
     }
 
-    suspend fun getMyInvites(): Result<List<Plan>> {
+    /** Mirrors Flutter's setRsvp — rewrites this user's entry in the invitations array. */
+    suspend fun setRsvp(planId: String, status: RsvpStatus): Result<Unit> {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
         return suspendCancellableCoroutine { continuation ->
-            db.collection("plans")
-                .whereArrayContains("invitations", uid)
-                .get()
-                .addOnSuccessListener { snapshot ->
-                    continuation.resume(Result.success(snapshot.documents.map { it.toInvitePlan() }))
+            val ref = db.collection("plans").document(planId)
+            db.runTransaction { transaction ->
+                val doc = transaction.get(ref)
+                val raw = (doc.get("invitations") as? List<*>).orEmpty()
+                val hasEntry = raw.any { e ->
+                    (e is Map<*, *> && e["userId"] == uid) || (e is String && e == uid)
                 }
-                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+                val updated = if (hasEntry) {
+                    raw.map { entry ->
+                        when {
+                            entry is Map<*, *> && entry["userId"] == uid ->
+                                hashMapOf("userId" to uid, "rsvp" to status.value,
+                                    "invitedAt" to entry["invitedAt"])
+                            entry is String && entry == uid ->
+                                hashMapOf("userId" to uid, "rsvp" to status.value)
+                            else -> entry
+                        }
+                    }
+                } else {
+                    raw + hashMapOf("userId" to uid, "rsvp" to status.value)
+                }
+                transaction.update(ref, "invitations", updated)
+            }
+            .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
+            .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
     }
 
-    private fun DocumentSnapshot.toInvitePlan(): Plan =
-        Plan(
-            id = id,
-            title = getString("name").orEmpty(),
-            date = "",
-            estimatedCostPerPerson = 0,
-            participants = (get("participantsIds") as? List<*>).orEmpty()
-                .filterIsInstance<String>()
-                .mapIndexed { i, participantId -> Participant(id = participantId, initials = "", avatarColorIndex = i) },
-            activities = emptyList(),
-            status = PlanStatus.PENDING_INVITE,
-            dateTime = getTimestamp("date")?.toDate()
-        )
+    private suspend fun fetchGoingParticipants(goingIds: List<String>): List<Participant> {
+        if (goingIds.isEmpty()) return emptyList()
+        val participants = mutableListOf<Participant>()
+        goingIds.chunked(10).forEach { batch ->
+            suspendCancellableCoroutine<Unit> { cont ->
+                db.collection("users")
+                    .whereIn(FieldPath.documentId(), batch)
+                    .get()
+                    .addOnSuccessListener { snapshot ->
+                        snapshot.documents.forEach { doc ->
+                            val name = doc.getString("name").orEmpty()
+                            val lastName = doc.getString("lastName").orEmpty()
+                            participants.add(
+                                Participant(
+                                    id = doc.id,
+                                    initials = buildInitials(name, lastName),
+                                    avatarColorIndex = participants.size % 4,
+                                    photoUrl = doc.getString("photoUrl").orEmpty()
+                                )
+                            )
+                        }
+                        cont.resume(Unit)
+                    }
+                    .addOnFailureListener {
+                        batch.forEach { id ->
+                            participants.add(Participant(id = id, initials = "?", avatarColorIndex = participants.size % 4))
+                        }
+                        cont.resume(Unit)
+                    }
+            }
+        }
+        return participants
+    }
+
+    private fun buildInitials(name: String, lastName: String): String {
+        val f = name.trim().firstOrNull()?.uppercaseChar() ?: ' '
+        val l = lastName.trim().firstOrNull()?.uppercaseChar() ?: ' '
+        return "$f$l".trim().ifBlank { "?" }
+    }
 
     suspend fun addActivityToPlan(planId: String, activityId: String, tags: List<String>): Result<Unit> {
         val changes = mutableMapOf<String, Any>("activityIds" to FieldValue.arrayUnion(activityId))
@@ -315,26 +436,4 @@ class PlanRepository(
         }
     }
 
-    suspend fun respondToInvite(planId: String, response: InviteResponse): Result<Unit> {
-        val uid = auth.currentUser?.uid
-            ?: return Result.failure(Exception("No active session."))
-
-        val changes = when (response) {
-            InviteResponse.GOING -> mapOf(
-                "invitations" to FieldValue.arrayRemove(uid),
-                "participantsIds" to FieldValue.arrayUnion(uid)
-            )
-            InviteResponse.CANT_MAKE -> mapOf(
-                "invitations" to FieldValue.arrayRemove(uid),
-                "declinedIds" to FieldValue.arrayUnion(uid)
-            )
-        }
-
-        return suspendCancellableCoroutine { continuation ->
-            db.collection("plans").document(planId)
-                .update(changes)
-                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
-                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-        }
-    }
 }

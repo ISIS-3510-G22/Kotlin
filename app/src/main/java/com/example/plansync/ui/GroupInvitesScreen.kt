@@ -73,6 +73,7 @@ fun GroupInvitesScreen(
                             items(uiState.invites) { group ->
                                 GroupInviteCard(
                                     group = group,
+                                    memberIds = uiState.memberIdsByGroup[group.id].orEmpty(),
                                     groupMembers = uiState.groupMembers,
                                     isSaving = uiState.isSaving,
                                     onJoin = { viewModel.join(group.id) },
@@ -90,6 +91,7 @@ fun GroupInvitesScreen(
 @Composable
 private fun GroupInviteCard(
     group: Group,
+    memberIds: List<String>,
     groupMembers: Map<String, User>,
     isSaving: Boolean,
     onJoin: () -> Unit,
@@ -104,7 +106,7 @@ private fun GroupInviteCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            GroupAvatarCluster(memberIds = group.memberIds, groupMembers = groupMembers)
+            GroupAvatarCluster(memberIds = memberIds, groupMembers = groupMembers)
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = group.name,
@@ -112,7 +114,7 @@ private fun GroupInviteCard(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "${group.memberIds.size} Members",
+                text = "${memberIds.size} Members",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF888888)
             )

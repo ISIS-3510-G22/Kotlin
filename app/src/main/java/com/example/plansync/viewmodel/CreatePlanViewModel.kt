@@ -1,10 +1,12 @@
 package com.example.plansync.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.ActivityRepository
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.model.Activity
+import com.example.plansync.service.LocationService
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,10 +29,11 @@ import java.util.Locale
  *  - Derived state: totalEstimatedCost and costPerPerson are computed from
  *    selectedActivities, so the UI always shows a consistent value (smart feature).
  */
-class CreatePlanViewModel(
-    private val planRepository: PlanRepository = PlanRepository(),
-    private val activityRepository: ActivityRepository = ActivityRepository()
-) : ViewModel() {
+class CreatePlanViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val planRepository = PlanRepository()
+    private val activityRepository = ActivityRepository()
+    private val locationService = LocationService(application)
 
     data class UiState(
         val planName: String = "",
@@ -101,12 +104,19 @@ class CreatePlanViewModel(
         }
     }
 
-    /**
-     * Sensor feature: called by the UI once GPS coordinates are resolved.
-     * Pre-populates the meetup location field.
-     */
     fun onLocationDetected(location: String) {
         _uiState.update { it.copy(locationText = location) }
+    }
+
+    /** Called after the user grants location permission; resolves GPS → address in background. */
+    fun detectLocation() {
+        viewModelScope.launch {
+            val loc = locationService.currentLocation()
+            val address = if (loc != null)
+                locationService.reverseGeocode(loc.latitude, loc.longitude)
+            else "Unable to detect location"
+            _uiState.update { it.copy(locationText = address) }
+        }
     }
 
     // ── Form field changes ─────────────────────────────────────────────────────
@@ -194,7 +204,7 @@ class CreatePlanViewModel(
                 ),
                 isPublic    = state.isPublic,
                 activityIds = state.selectedActivities.map { it.id },
-                tags        = state.selectedActivities.map { it.category }.distinct()
+                tags        = state.selectedActivities.flatMap { it.tags }.filter { it.isNotBlank() }.distinct()
             ).onSuccess {
                 _uiState.update { it.copy(isLoading = false, isSaved = true) }
             }.onFailure { error ->

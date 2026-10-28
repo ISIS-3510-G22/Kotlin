@@ -129,7 +129,6 @@ fun MyActivitiesScreen(
     }
 }
 
-// Top
 
 @Composable
 private fun MyActivitiesTopBar() {
@@ -148,7 +147,6 @@ private fun MyActivitiesTopBar() {
     }
 }
 
-// Tabs
 
 @Composable
 private fun MyActivitiesTabRow(selectedTab: ActivityTab, onTabSelected: (ActivityTab) -> Unit) {
@@ -203,7 +201,6 @@ private fun ActivityTabPill(
     }
 }
 
-// Empty state
 
 private fun emptyStateMessage(tab: ActivityTab): String = when (tab) {
     ActivityTab.FOR_YOU -> "No public activities yet."
@@ -222,7 +219,6 @@ private fun EmptyActivitiesMessage(tab: ActivityTab) {
     }
 }
 
-// Activity card
 
 @Composable
 fun ActivityCard(
@@ -312,7 +308,6 @@ fun ActivityCard(
     }
 }
 
-// NavBar
 
 private data class MyActivitiesNavItem(
     val label: String,

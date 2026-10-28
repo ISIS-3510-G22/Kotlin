@@ -18,6 +18,7 @@ class GroupInvitesViewModel(
     data class UiState(
         val invites: List<Group> = emptyList(),
         val groupMembers: Map<String, User> = emptyMap(),
+        val memberIdsByGroup: Map<String, List<String>> = emptyMap(),
         val isLoading: Boolean = false,
         val errorMessage: String? = null,
         val isSaving: Boolean = false,
@@ -40,7 +41,13 @@ class GroupInvitesViewModel(
     }
 
     private suspend fun loadGroupMembers() {
-        val memberIds = _uiState.value.invites.flatMap { it.memberIds.take(3) }.distinct()
+        val groupIds = _uiState.value.invites.map { it.id }
+        if (groupIds.isEmpty()) return
+
+        val memberIdsByGroup = repository.getMemberIds(groupIds).getOrElse { return }
+        _uiState.update { it.copy(memberIdsByGroup = memberIdsByGroup) }
+
+        val memberIds = memberIdsByGroup.values.flatMap { it.take(3) }.distinct()
         if (memberIds.isEmpty()) return
 
         repository.getUsersByIds(memberIds)
