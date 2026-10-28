@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class ActivityTab { FOR_YOU, LIKED, PRIVATE }
+enum class ActivityTab { FOR_YOU, LIKED, CREATED, PRIVATE }
 
 class MyActivitiesViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -82,6 +82,7 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
                 .filter { it.visibility == ActivityVisibility.PUBLIC }
                 .sortedBy { distances[it.id] ?: Float.MAX_VALUE }
             ActivityTab.LIKED -> activities.filter { uid in it.likedBy }
+            ActivityTab.CREATED -> activities.filter { it.ownerId == uid }
             ActivityTab.PRIVATE -> activities.filter { it.ownerId == uid && it.visibility == ActivityVisibility.PRIVATE }
         }
     }
