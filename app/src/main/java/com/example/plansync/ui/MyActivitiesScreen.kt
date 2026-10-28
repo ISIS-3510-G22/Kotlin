@@ -160,6 +160,7 @@ private fun MyActivitiesTabRow(selectedTab: ActivityTab, onTabSelected: (Activit
         listOf(
             ActivityTab.FOR_YOU to "For You",
             ActivityTab.LIKED to "Liked",
+            ActivityTab.CREATED to "Created",
             ActivityTab.PRIVATE to "Private"
         ).forEach { (tab, label) ->
             ActivityTabPill(
@@ -205,6 +206,7 @@ private fun ActivityTabPill(
 private fun emptyStateMessage(tab: ActivityTab): String = when (tab) {
     ActivityTab.FOR_YOU -> "No public activities yet."
     ActivityTab.LIKED -> "No liked activities yet."
+    ActivityTab.CREATED -> "You haven't created any activities yet."
     ActivityTab.PRIVATE -> "No private activities yet."
 }
 
