@@ -1,5 +1,6 @@
 package com.example.plansync.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -44,6 +46,7 @@ fun EditProfileScreen(
     onAddMethod: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var showPhotoSourceDialog by remember { mutableStateOf(false) }
 
@@ -53,8 +56,18 @@ fun EditProfileScreen(
 
     LaunchedEffect(uiState.didSave) {
         if (uiState.didSave) {
+            if (uiState.savedOffline) {
+                Toast.makeText(context, "Saved offline. Changes will sync when you reconnect.", Toast.LENGTH_LONG).show()
+            }
             onSaved()
             viewModel.onSaveHandled()
+        }
+    }
+
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.onErrorShown()
         }
     }
 
@@ -67,35 +80,38 @@ fun EditProfileScreen(
 
     Scaffold(
         topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    onClick = onBack,
-                    shape = CircleShape,
-                    color = CoralLight,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Coral
-                        )
-                    }
-                }
-                Text(
-                    text = "Edit Profile",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
+            Column {
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 40.dp),
-                    textAlign = TextAlign.Center
-                )
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        onClick = onBack,
+                        shape = CircleShape,
+                        color = CoralLight,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Coral
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Edit Profile",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 40.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                OfflineBanner(isOnline = uiState.isOnline)
             }
         },
         bottomBar = {
@@ -147,7 +163,7 @@ fun EditProfileScreen(
                         .size(96.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.secondary)
-                        .clickable { showPhotoSourceDialog = true },
+                        .clickable(enabled = uiState.isOnline) { showPhotoSourceDialog = true },
                     contentAlignment = Alignment.Center
                 ) {
                     if (uiState.photoUrl.isNotBlank()) {
@@ -177,8 +193,9 @@ fun EditProfileScreen(
                     }
                     Surface(
                         onClick = { showPhotoSourceDialog = true },
+                        enabled = uiState.isOnline,
                         shape = CircleShape,
-                        color = Coral,
+                        color = if (uiState.isOnline) Coral else Color.Gray,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .size(28.dp)

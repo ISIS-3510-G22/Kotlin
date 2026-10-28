@@ -4,6 +4,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import android.net.Uri
 import com.example.plansync.model.PaymentMethod
 import com.example.plansync.model.PaymentMethodType
+import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
@@ -16,17 +17,13 @@ class ProfileRepository(
     private val auth: FirebaseAuth = FirebaseProvider.auth
 ) {
 
-
-    suspend fun updateProfile(name: String, lastName: String, phone: String): Result<Unit> {
+    suspend fun updateProfile(name: String, lastName: String, phone: String, isOnline: Boolean): WriteResult {
         val uid = auth.currentUser?.uid
-            ?: return Result.failure(Exception("No active session."))
+            ?: return WriteResult.Failed(Exception("No active session."))
 
-        return suspendCancellableCoroutine { continuation ->
-            db.collection("users").document(uid)
-                .set(mapOf("name" to name, "lastName" to lastName, "phone" to phone), SetOptions.merge())
-                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
-                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-        }
+        val task = db.collection("users").document(uid)
+            .set(mapOf("name" to name, "lastName" to lastName, "phone" to phone), SetOptions.merge())
+        return awaitWrite(task, isOnline)
     }
 
     suspend fun uploadProfilePhoto(uri: Uri): Result<String> {
@@ -64,17 +61,24 @@ class ProfileRepository(
         }
     }
 
-    suspend fun deletePaymentMethod(method: PaymentMethod): Result<Unit> {
+    suspend fun deletePaymentMethod(method: PaymentMethod, isOnline: Boolean): WriteResult {
         val uid = auth.currentUser?.uid
-            ?: return Result.failure(Exception("No active session."))
+            ?: return WriteResult.Failed(Exception("No active session."))
 
         val data = mapOf("id" to method.id, "type" to method.label, "account" to method.detail)
 
+        val task = db.collection("users").document(uid)
+            .set(mapOf("reimbursementMethods" to FieldValue.arrayRemove(data)), SetOptions.merge())
+        return awaitWrite(task, isOnline)
+    }
+
+    private suspend fun awaitWrite(task: Task<Void>, isOnline: Boolean): WriteResult {
+        if (!isOnline) return WriteResult.Queued
+
         return suspendCancellableCoroutine { continuation ->
-            db.collection("users").document(uid)
-                .set(mapOf("reimbursementMethods" to FieldValue.arrayRemove(data)), SetOptions.merge())
-                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
-                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+            task
+                .addOnSuccessListener { continuation.resume(WriteResult.Committed) }
+                .addOnFailureListener { e -> continuation.resume(WriteResult.Failed(e)) }
         }
     }
 }
