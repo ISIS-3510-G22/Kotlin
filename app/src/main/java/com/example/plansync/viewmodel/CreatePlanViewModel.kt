@@ -201,6 +201,10 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
             _uiState.update { it.copy(errorMessage = "Please select a date.") }
             return
         }
+        if (planDateTime(state.selectedDateMillis, state.selectedHour, state.selectedMinute).before(Date())) {
+            _uiState.update { it.copy(errorMessage = "The plan date and time must be in the future. Change the date or time.") }
+            return
+        }
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
