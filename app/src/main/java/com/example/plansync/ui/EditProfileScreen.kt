@@ -111,7 +111,10 @@ fun EditProfileScreen(
                         textAlign = TextAlign.Center
                     )
                 }
-                OfflineBanner(isOnline = uiState.isOnline)
+                OfflineBanner(
+                    isOnline = uiState.isOnline,
+                    message = "You're offline. Profile changes will sync when you reconnect, changing your photo needs a connection."
+                )
             }
         },
         bottomBar = {

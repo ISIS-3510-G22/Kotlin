@@ -22,6 +22,7 @@ import com.example.plansync.ui.SignUpScreen
 import com.example.plansync.ui.navigation.MainNavHost
 import com.example.plansync.ui.theme.PlanSyncTheme
 import com.example.plansync.data.FirebaseProvider
+import com.example.plansync.data.LocalStorageProvider
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.PersistentCacheSettings
 
@@ -50,6 +51,8 @@ class MainActivity : ComponentActivity() {
                     .build()
             )
             .build()
+
+        LocalStorageProvider.init(this)
 
         enableEdgeToEdge()
         setContent {

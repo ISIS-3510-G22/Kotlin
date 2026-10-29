@@ -17,7 +17,8 @@ import kotlinx.coroutines.tasks.await
 
 class ActivityRepository(
     private val db: FirebaseFirestore = FirebaseProvider.firestore,
-    private val auth: FirebaseAuth = FirebaseProvider.auth
+    private val auth: FirebaseAuth = FirebaseProvider.auth,
+    private val storage: LocalStorageProvider = LocalStorageProvider
 ) {
 
     private val activities = db.collection("activities")
@@ -26,6 +27,29 @@ class ActivityRepository(
         .collection("runs")
 
     val currentUserId: String? get() = auth.currentUser?.uid
+
+    private fun cacheFile(): String? = auth.currentUser?.uid?.let { "activities_$it.json" }
+
+    suspend fun getCachedActivities(): List<Activity> {
+        val file = cacheFile() ?: return emptyList()
+        return storage.read(file).toJsonList { it.toActivity() }
+    }
+
+    suspend fun getCachedActivity(activityId: String): Activity? =
+        getCachedActivities().find { it.id == activityId }
+
+    suspend fun cacheActivities(list: List<Activity>) {
+        val file = cacheFile() ?: return
+        storage.write(file, list.toJsonString { it.toJson() })
+    }
+
+    suspend fun cacheActivity(activity: Activity) {
+        val file = cacheFile() ?: return
+        storage.update(file) { json ->
+            val others = json.toJsonList { it.toActivity() }.filter { it.id != activity.id }
+            (listOf(activity) + others).toJsonString { it.toJson() }
+        }
+    }
 
     suspend fun getActivities(): Result<List<Activity>> {
         val uid = auth.currentUser?.uid
