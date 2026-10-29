@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -94,9 +95,11 @@ fun ActivityDetailScreen(
                         activity = activity,
                         isOwner = uiState.isOwner,
                         isUploadingPhoto = uiState.isUploadingPhoto,
+                        isSharing = uiState.isSharing,
                         onBack = onBack,
                         onEdit = { onEdit(activity.id) },
-                        onChangePhoto = { showPhotoSourceDialog = true }
+                        onChangePhoto = { showPhotoSourceDialog = true },
+                        onShare = viewModel::shareActivity
                     )
                     ActivityInfo(
                         activity = activity,
@@ -122,9 +125,11 @@ private fun ActivityPhotoHeader(
     activity: Activity,
     isOwner: Boolean,
     isUploadingPhoto: Boolean,
+    isSharing: Boolean,
     onBack: () -> Unit,
     onEdit: () -> Unit,
-    onChangePhoto: () -> Unit
+    onChangePhoto: () -> Unit,
+    onShare: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -167,8 +172,15 @@ private fun ActivityPhotoHeader(
             HeaderButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Coral)
             }
-            if (isOwner) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HeaderButton(onClick = { if (!isSharing) onShare() }) {
+                    if (isSharing) {
+                        CircularProgressIndicator(color = Coral, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    } else {
+                        Icon(Icons.Filled.Share, contentDescription = "Share activity", tint = Coral)
+                    }
+                }
+                if (isOwner) {
                     HeaderButton(onClick = onChangePhoto) {
                         Icon(Icons.Filled.PhotoCamera, contentDescription = "Change photo", tint = Coral)
                     }
