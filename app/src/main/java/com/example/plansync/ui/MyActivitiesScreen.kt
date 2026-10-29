@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -86,6 +87,11 @@ fun MyActivitiesScreen(
         ) {
             MyActivitiesTopBar()
 
+            OfflineBanner(
+                isOnline = uiState.isOnline,
+                message = "You're offline. Showing activities saved on your phone, new ones will upload when you reconnect."
+            )
+
             MyActivitiesTabRow(
                 selectedTab = uiState.selectedTab,
                 onTabSelected = viewModel::selectTab
@@ -107,7 +113,10 @@ fun MyActivitiesScreen(
                     }
                 }
                 uiState.filteredActivities.isEmpty() -> {
-                    EmptyActivitiesMessage(tab = uiState.selectedTab)
+                    EmptyActivitiesMessage(
+                        tab = uiState.selectedTab,
+                        nothingSaved = !uiState.isOnline && uiState.allActivities.isEmpty()
+                    )
                 }
                 else -> {
                     LazyColumn(
@@ -211,10 +220,15 @@ private fun emptyStateMessage(tab: ActivityTab): String = when (tab) {
 }
 
 @Composable
-private fun EmptyActivitiesMessage(tab: ActivityTab) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+private fun EmptyActivitiesMessage(tab: ActivityTab, nothingSaved: Boolean) {
+    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Text(
-            text = emptyStateMessage(tab),
+            text = if (nothingSaved) {
+                "No activities saved on your phone yet. Connect to the internet to load them."
+            } else {
+                emptyStateMessage(tab)
+            },
+            textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium,
             color = Color(0xFF888888)
         )

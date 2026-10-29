@@ -8,6 +8,7 @@ import com.example.plansync.data.ActivityRepository
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityVisibility
 import com.example.plansync.service.LocationService
+import com.example.plansync.service.NetworkMonitor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +24,7 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
 
     private val repository = ActivityRepository()
     private val locationService = LocationService(application)
+    private val networkMonitor = NetworkMonitor.get(application)
     private var userLocation: Location? = null
 
     data class UiState(
@@ -30,34 +32,53 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
         val selectedTab: ActivityTab = ActivityTab.FOR_YOU,
         val filteredActivities: List<Activity> = emptyList(),
         val distancesKm: Map<String, Float> = emptyMap(),
+        val isOnline: Boolean = true,
         val isLoading: Boolean = false,
         val errorMessage: String? = null
     )
 
-    private val _uiState = MutableStateFlow(UiState())
+    private val _uiState = MutableStateFlow(UiState(isOnline = networkMonitor.isCurrentlyOnline()))
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            networkMonitor.isOnline.collect { online ->
+                val reconnected = online && !_uiState.value.isOnline
+                _uiState.update { it.copy(isOnline = online) }
+                if (reconnected) loadActivities()
+            }
+        }
+    }
 
     fun loadActivities() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            val cached = repository.getCachedActivities()
+            _uiState.update { it.copy(isLoading = cached.isEmpty(), errorMessage = null) }
+            if (cached.isNotEmpty()) show(cached)
 
+            val isOnline = _uiState.value.isOnline
             val (result, location) = withContext(Dispatchers.IO) {
-                val activities = async { repository.getActivities() }
+                val activities = async { if (isOnline) fetchAndCache() else Result.success(cached) }
                 val location = async { locationService.currentLocation() }
                 activities.await() to location.await()
             }
             location?.let { userLocation = it }
 
             result
-                .onSuccess { activities ->
-                    _uiState.update { it.copy(allActivities = activities) }
-                    refresh()
-                    _uiState.update { it.copy(isLoading = false) }
-                }
+                .onSuccess { activities -> show(activities) }
                 .onFailure { error ->
-                    _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+                    if (cached.isEmpty()) _uiState.update { it.copy(errorMessage = error.message) }
                 }
+            _uiState.update { it.copy(isLoading = false) }
         }
+    }
+
+    private suspend fun fetchAndCache(): Result<List<Activity>> =
+        repository.getActivities().onSuccess { repository.cacheActivities(it) }
+
+    private suspend fun show(activities: List<Activity>) {
+        _uiState.update { it.copy(allActivities = activities) }
+        refresh()
     }
 
     fun onLocationPermissionResult() {

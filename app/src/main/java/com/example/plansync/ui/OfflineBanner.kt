@@ -13,12 +13,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
 fun OfflineBanner(
     isOnline: Boolean,
+    message: String,
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -31,11 +33,12 @@ fun OfflineBanner(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color(0xFFB00020))
-                .padding(vertical = 6.dp),
+                .padding(horizontal = 16.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "You're offline — changes will sync when you reconnect",
+                text = message,
+                textAlign = TextAlign.Center,
                 color = Color.White,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
