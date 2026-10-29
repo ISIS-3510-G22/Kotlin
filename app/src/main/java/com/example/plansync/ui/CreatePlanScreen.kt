@@ -50,6 +50,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -67,6 +68,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.plansync.model.Activity
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.CreatePlanViewModel
+import java.util.Calendar
+import java.util.TimeZone
 
 /**
  * UI layer — Composable screen for creating a new Plan.
@@ -108,8 +111,16 @@ fun CreatePlanScreen(
 
     // ── Date picker dialog ────────────────────────────────────────────────────
     if (uiState.showDatePicker) {
+        val now = Calendar.getInstance()
+        val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        utc.clear()
+        utc.set(now.get(Calendar.YEAR), now.get(Calendar.MONTH), now.get(Calendar.DAY_OF_MONTH))
+        val todayUtcMillis = utc.timeInMillis
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = uiState.selectedDateMillis
+            initialSelectedDateMillis = uiState.selectedDateMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis >= todayUtcMillis
+            }
         )
         DatePickerDialog(
             onDismissRequest = { viewModel.onHideDatePicker() },

@@ -14,8 +14,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * ViewModel layer — MVVM architecture.
@@ -64,7 +66,9 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
 
         val formattedDate: String
             get() = selectedDateMillis?.let {
-                SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(it))
+                SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }.format(Date(it))
             } ?: ""
 
         val formattedTime: String
@@ -171,6 +175,15 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
 
     fun onErrorDismissed() { _uiState.update { it.copy(errorMessage = null) } }
 
+    private fun planDateTime(pickedMillis: Long, hour: Int, minute: Int): Date {
+        val picked = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        picked.timeInMillis = pickedMillis
+        val local = Calendar.getInstance()
+        local.clear()
+        local.set(picked.get(Calendar.YEAR), picked.get(Calendar.MONTH), picked.get(Calendar.DAY_OF_MONTH), hour, minute)
+        return local.time
+    }
+
     // ── Save ───────────────────────────────────────────────────────────────────
 
     /**
@@ -188,20 +201,16 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
             _uiState.update { it.copy(errorMessage = "Please select a date.") }
             return
         }
+        if (planDateTime(state.selectedDateMillis, state.selectedHour, state.selectedMinute).before(Date())) {
+            _uiState.update { it.copy(errorMessage = "The plan date and time must be in the future. Change the date or time.") }
+            return
+        }
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             planRepository.createPlan(
                 name        = state.planName,
-                date        = Timestamp(
-                    java.util.Calendar.getInstance().apply {
-                        timeInMillis = state.selectedDateMillis
-                        set(java.util.Calendar.HOUR_OF_DAY, state.selectedHour)
-                        set(java.util.Calendar.MINUTE, state.selectedMinute)
-                        set(java.util.Calendar.SECOND, 0)
-                        set(java.util.Calendar.MILLISECOND, 0)
-                    }.time
-                ),
+                date        = Timestamp(planDateTime(state.selectedDateMillis, state.selectedHour, state.selectedMinute)),
                 isPublic    = state.isPublic,
                 activityIds = state.selectedActivities.map { it.id },
                 tags        = state.selectedActivities.flatMap { it.tags }.filter { it.isNotBlank() }.distinct()
