@@ -8,11 +8,14 @@ import com.example.plansync.data.ActivityRepository
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityVisibility
 import com.example.plansync.service.LocationService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class ActivityTab { FOR_YOU, LIKED, CREATED, PRIVATE }
 
@@ -38,10 +41,18 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-            repository.getActivities()
+            val (result, location) = withContext(Dispatchers.IO) {
+                val activities = async { repository.getActivities() }
+                val location = async { locationService.currentLocation() }
+                activities.await() to location.await()
+            }
+            location?.let { userLocation = it }
+
+            result
                 .onSuccess { activities ->
-                    _uiState.update { it.copy(isLoading = false, allActivities = activities) }
+                    _uiState.update { it.copy(allActivities = activities) }
                     refresh()
+                    _uiState.update { it.copy(isLoading = false) }
                 }
                 .onFailure { error ->
                     _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
@@ -58,20 +69,23 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
 
     fun selectTab(tab: ActivityTab) {
         _uiState.update { it.copy(selectedTab = tab) }
-        refresh()
+        viewModelScope.launch { refresh() }
     }
 
-    private fun refresh() {
-        _uiState.update { current ->
-            val distances = userLocation?.let { location ->
+    private suspend fun refresh() {
+        val current = _uiState.value
+        val location = userLocation
+        val (distances, filtered) = withContext(Dispatchers.Default) {
+            val distances = location?.let {
                 current.allActivities
                     .filter { it.lat != null && it.lng != null }
-                    .associate { it.id to locationService.distanceKm(location, it.lat!!, it.lng!!) }
+                    .associate { activity -> activity.id to locationService.distanceKm(location, activity.lat!!, activity.lng!!) }
             }.orEmpty()
-            current.copy(
-                distancesKm = distances,
-                filteredActivities = filterFor(current.selectedTab, current.allActivities, distances)
-            )
+            distances to filterFor(current.selectedTab, current.allActivities, distances)
+        }
+        _uiState.update {
+            if (it.selectedTab != current.selectedTab) it
+            else it.copy(distancesKm = distances, filteredActivities = filtered)
         }
     }
 
