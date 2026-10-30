@@ -9,6 +9,7 @@ import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityVisibility
 import com.example.plansync.service.LocationService
 import com.example.plansync.service.NetworkMonitor
+import com.example.plansync.service.OfflineSyncService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -73,8 +74,12 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    private suspend fun fetchAndCache(): Result<List<Activity>> =
-        repository.getActivities().onSuccess { repository.cacheActivities(it) }
+    private suspend fun fetchAndCache(): Result<List<Activity>> {
+        OfflineSyncService.syncNow()
+        return repository.getActivities()
+            .map { OfflineSyncService.applyPending(it) }
+            .onSuccess { repository.cacheActivities(it) }
+    }
 
     private suspend fun show(activities: List<Activity>) {
         _uiState.update { it.copy(allActivities = activities) }

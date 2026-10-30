@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.ActivityRepository
 import com.example.plansync.data.StorageRepository
 import com.example.plansync.model.Activity
+import com.example.plansync.service.NetworkMonitor
+import com.example.plansync.service.OfflineSyncService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +26,8 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
 
     private val repository = ActivityRepository()
     private val storageRepository = StorageRepository()
+    private val networkMonitor = NetworkMonitor.get(application)
+    private var activityId: String? = null
 
     data class UiState(
         val activity: Activity? = null,
@@ -32,18 +36,48 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
         val isLoading: Boolean = false,
         val isUploadingPhoto: Boolean = false,
         val isSharing: Boolean = false,
+        val isOnline: Boolean = true,
         val errorMessage: String? = null
     )
 
-    private val _uiState = MutableStateFlow(UiState())
+    private val _uiState = MutableStateFlow(UiState(isOnline = networkMonitor.isCurrentlyOnline()))
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            networkMonitor.isOnline.collect { online ->
+                val reconnected = online && !_uiState.value.isOnline
+                _uiState.update { it.copy(isOnline = online) }
+                if (reconnected) {
+                    OfflineSyncService.syncNow()
+                    activityId?.let(::load)
+                }
+            }
+        }
+    }
+
     fun load(activityId: String) {
+        this.activityId = activityId
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            repository.getActivity(activityId)
-                .onSuccess { activity -> show(activity) }
-                .onFailure { error -> _uiState.update { it.copy(isLoading = false, errorMessage = error.message) } }
+
+            val isOnline = _uiState.value.isOnline
+            val fromNetwork = if (isOnline) repository.getActivity(activityId) else null
+            val activity = fromNetwork?.getOrNull()
+                ?.let { OfflineSyncService.applyPending(listOf(it)).first() }
+                ?.also { repository.cacheActivity(it) }
+                ?: repository.getCachedActivity(activityId)
+
+            if (activity != null) {
+                show(activity)
+            } else {
+                val message = if (isOnline) {
+                    fromNetwork?.exceptionOrNull()?.message
+                } else {
+                    "This activity isn't saved on your phone. Connect to the internet to open it."
+                }
+                _uiState.update { it.copy(isLoading = false, errorMessage = message) }
+            }
         }
     }
 
@@ -52,9 +86,16 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
         val uid = repository.currentUserId ?: return
         val liked = !_uiState.value.isLiked
         viewModelScope.launch {
+            if (!_uiState.value.isOnline) {
+                show(OfflineSyncService.setLikedOffline(activity, liked))
+                return@launch
+            }
+            OfflineSyncService.syncNow()
+            val updated = activity.copy(likedBy = if (liked) activity.likedBy + uid else activity.likedBy - uid)
             repository.setLiked(activity.id, liked)
                 .onSuccess {
-                    show(activity.copy(likedBy = if (liked) activity.likedBy + uid else activity.likedBy - uid))
+                    repository.cacheActivity(updated)
+                    show(updated)
                 }
                 .onFailure { error -> _uiState.update { it.copy(errorMessage = error.message) } }
         }
@@ -62,6 +103,7 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
 
     fun onPhotoPicked(uri: Uri) {
         val activity = _uiState.value.activity ?: return
+        if (!_uiState.value.isOnline) return
         viewModelScope.launch {
             _uiState.update { it.copy(isUploadingPhoto = true, errorMessage = null) }
             repository.updatePhoto(activity.id, uri)
@@ -74,10 +116,11 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
 
     fun shareActivity() {
         val activity = _uiState.value.activity ?: return
+        val isOnline = _uiState.value.isOnline
         _uiState.update { it.copy(isSharing = true) }
         viewModelScope.launch(Dispatchers.IO) {
             val imageUri = try {
-                downloadPhoto(activity)
+                if (isOnline) downloadPhoto(activity) else null
             } catch (e: IOException) {
                 null
             }
