@@ -6,11 +6,15 @@ import com.example.plansync.data.CrewRepository
 import com.example.plansync.model.Friend
 import com.example.plansync.model.Group
 import com.example.plansync.model.User
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class CrewTab { GROUPS, FRIENDS }
 
@@ -38,40 +42,59 @@ class MyCrewViewModel(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     fun loadCrew() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, groupsError = null, friendsError = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                _uiState.update { it.copy(isLoading = true, groupsError = null, friendsError = null) }
+            }
 
-            repository.getGroups()
-                .onSuccess { groups -> _uiState.update { it.copy(groups = groups) } }
-                .onFailure { error -> _uiState.update { it.copy(groupsError = error.message) } }
+            coroutineScope {
+                val groupsJob = async(Dispatchers.IO) { repository.getGroups() }
+                val friendsJob = async(Dispatchers.IO) { repository.getFriends() }
+                val groupsResult = groupsJob.await()
+                val friendsResult = friendsJob.await()
 
-            repository.getFriends()
-                .onSuccess { friends -> _uiState.update { it.copy(friends = friends) } }
-                .onFailure { error -> _uiState.update { it.copy(friendsError = error.message) } }
+                withContext(Dispatchers.Main) {
+                    groupsResult
+                        .onSuccess { groups -> _uiState.update { it.copy(groups = groups) } }
+                        .onFailure { error -> _uiState.update { it.copy(groupsError = error.message) } }
+                    friendsResult
+                        .onSuccess { friends -> _uiState.update { it.copy(friends = friends) } }
+                        .onFailure { error -> _uiState.update { it.copy(friendsError = error.message) } }
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
 
-            _uiState.update { it.copy(isLoading = false) }
-
-            loadGroupMembers()
-            loadFriendPhotos()
-            loadFriendRequestsCount()
-            loadGroupInvitesCount()
+            launch { loadGroupMembers() }
+            launch { loadFriendPhotos() }
+            launch { loadFriendRequestsCount() }
+            launch { loadGroupInvitesCount() }
         }
     }
 
     private suspend fun loadGroupInvitesCount() {
-        _uiState.update { it.copy(groupInvitesCountError = null) }
+        withContext(Dispatchers.Main) {
+            _uiState.update { it.copy(groupInvitesCountError = null) }
+        }
 
-        repository.getGroupInvites()
-            .onSuccess { invites -> _uiState.update { it.copy(groupInvitesCount = invites.size) } }
-            .onFailure { error -> _uiState.update { it.copy(groupInvitesCount = 0, groupInvitesCountError = error.message) } }
+        val result = repository.getGroupInvites()
+        withContext(Dispatchers.Main) {
+            result
+                .onSuccess { invites -> _uiState.update { it.copy(groupInvitesCount = invites.size) } }
+                .onFailure { error -> _uiState.update { it.copy(groupInvitesCount = 0, groupInvitesCountError = error.message) } }
+        }
     }
 
     private suspend fun loadFriendRequestsCount() {
-        _uiState.update { it.copy(friendRequestsCountError = null) }
+        withContext(Dispatchers.Main) {
+            _uiState.update { it.copy(friendRequestsCountError = null) }
+        }
 
-        repository.getFriendRequests()
-            .onSuccess { requests -> _uiState.update { it.copy(friendRequestsCount = requests.size) } }
-            .onFailure { error -> _uiState.update { it.copy(friendRequestsCount = 0, friendRequestsCountError = error.message) } }
+        val result = repository.getFriendRequests()
+        withContext(Dispatchers.Main) {
+            result
+                .onSuccess { requests -> _uiState.update { it.copy(friendRequestsCount = requests.size) } }
+                .onFailure { error -> _uiState.update { it.copy(friendRequestsCount = 0, friendRequestsCountError = error.message) } }
+        }
     }
 
     private suspend fun loadGroupMembers() {
@@ -79,25 +102,32 @@ class MyCrewViewModel(
         if (groupIds.isEmpty()) return
 
         val memberIdsByGroup = repository.getMemberIds(groupIds).getOrElse { return }
-        _uiState.update { it.copy(memberIdsByGroup = memberIdsByGroup) }
+        withContext(Dispatchers.Main) {
+            _uiState.update { it.copy(memberIdsByGroup = memberIdsByGroup) }
+        }
 
-        val memberIds = memberIdsByGroup.values.flatMap { it.take(3) }.distinct()
+        val memberIds = withContext(Dispatchers.Default) {
+            memberIdsByGroup.values.flatMap { it.take(3) }.distinct()
+        }
         if (memberIds.isEmpty()) return
 
-        repository.getUsersByIds(memberIds)
-            .onSuccess { users -> _uiState.update { it.copy(groupMembers = users.associateBy { user -> user.id }) } }
+        val users = repository.getUsersByIds(memberIds).getOrElse { return }
+        val usersById = withContext(Dispatchers.Default) { users.associateBy { it.id } }
+        withContext(Dispatchers.Main) {
+            _uiState.update { it.copy(groupMembers = usersById) }
+        }
     }
 
     private suspend fun loadFriendPhotos() {
         val friendIds = _uiState.value.friends.map { it.id }
         if (friendIds.isEmpty()) return
 
-        repository.getPhotoUrls(friendIds)
-            .onSuccess { photos ->
-                _uiState.update { state ->
-                    state.copy(friends = state.friends.map { it.copy(photoUrl = photos[it.id].orEmpty()) })
-                }
+        val photos = repository.getPhotoUrls(friendIds).getOrElse { return }
+        withContext(Dispatchers.Main) {
+            _uiState.update { state ->
+                state.copy(friends = state.friends.map { it.copy(photoUrl = photos[it.id].orEmpty()) })
             }
+        }
     }
 
     fun selectTab(tab: CrewTab) {
