@@ -27,10 +27,9 @@ import kotlinx.coroutines.launch
  * The Composable calls functions on this ViewModel only — it never touches
  * [AuthRepository] directly. This keeps the UI layer thin and testable.
  */
-class LoginViewModel(
-    application: Application,
-    private val repository: AuthRepository = AuthRepository()
-) : AndroidViewModel(application) {
+class LoginViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = AuthRepository()
 
     private val networkMonitor = NetworkMonitor.get(application)
 
