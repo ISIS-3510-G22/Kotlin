@@ -186,7 +186,7 @@ private data class ProfileNavItem(
 private val profileNavItems = listOf(
     ProfileNavItem("Explore", Icons.Filled.Explore),
     ProfileNavItem("My Plans", Icons.Filled.CalendarMonth),
-    ProfileNavItem("My Activities", Icons.Filled.Checklist),
+    ProfileNavItem("Activities", Icons.Filled.Checklist),
     ProfileNavItem("My Crew", Icons.Filled.Groups),
     ProfileNavItem("My Profile", Icons.Filled.Person)
 )

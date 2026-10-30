@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -16,7 +17,9 @@ import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.plansync.model.Activity
+import com.example.plansync.model.ActivityVisibility
 import androidx.compose.ui.layout.ContentScale
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.ActivityTab
@@ -97,6 +101,15 @@ fun MyActivitiesScreen(
                 onTabSelected = viewModel::selectTab
             )
 
+            if (uiState.selectedTab == ActivityTab.ALL && uiState.availableTags.isNotEmpty()) {
+                TagFilterRow(
+                    tags = uiState.availableTags,
+                    selectedTags = uiState.selectedTags,
+                    onTagToggled = viewModel::toggleTag,
+                    onClear = viewModel::clearTags
+                )
+            }
+
             when {
                 uiState.isLoading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -128,6 +141,7 @@ fun MyActivitiesScreen(
                                 activity = activity,
                                 distanceKm = uiState.distancesKm[activity.id],
                                 isPending = activity.id in uiState.pendingIds,
+                                showVisibility = uiState.selectedTab == ActivityTab.CREATED,
                                 onClick = { onActivitySelected(activity.id) },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
@@ -150,7 +164,7 @@ private fun MyActivitiesTopBar() {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "My Activities",
+            text = "Activities",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
@@ -168,10 +182,10 @@ private fun MyActivitiesTabRow(selectedTab: ActivityTab, onTabSelected: (Activit
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         listOf(
+            ActivityTab.ALL to "All",
             ActivityTab.FOR_YOU to "For You",
             ActivityTab.LIKED to "Liked",
-            ActivityTab.CREATED to "Created",
-            ActivityTab.PRIVATE to "Private"
+            ActivityTab.CREATED to "Created"
         ).forEach { (tab, label) ->
             ActivityTabPill(
                 label = label,
@@ -213,11 +227,53 @@ private fun ActivityTabPill(
 }
 
 
+@Composable
+private fun TagFilterRow(
+    tags: List<String>,
+    selectedTags: Set<String>,
+    onTagToggled: (String) -> Unit,
+    onClear: () -> Unit
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            TagChip(label = "All tags", isSelected = selectedTags.isEmpty(), onClick = onClear)
+        }
+        items(tags) { tag ->
+            TagChip(label = tag, isSelected = tag in selectedTags, onClick = { onTagToggled(tag) })
+        }
+    }
+}
+
+@Composable
+private fun TagChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (isSelected) Coral.copy(alpha = 0.15f) else Color.White)
+            .border(1.dp, if (isSelected) Coral else Color(0xFFDDDDDD), RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) Coral else Color(0xFF666666)
+        )
+    }
+}
+
 private fun emptyStateMessage(tab: ActivityTab): String = when (tab) {
-    ActivityTab.FOR_YOU -> "No public activities yet."
+    ActivityTab.ALL -> "No activities match these tags."
+    ActivityTab.FOR_YOU -> "No recommendations yet. Like a few activities and we'll suggest ones you'll enjoy."
     ActivityTab.LIKED -> "No liked activities yet."
     ActivityTab.CREATED -> "You haven't created any activities yet."
-    ActivityTab.PRIVATE -> "No private activities yet."
 }
 
 @Composable
@@ -243,7 +299,8 @@ fun ActivityCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     distanceKm: Float? = null,
-    isPending: Boolean = false
+    isPending: Boolean = false,
+    showVisibility: Boolean = false
 ) {
     Card(
         onClick = onClick,
@@ -312,6 +369,10 @@ fun ActivityCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFF888888)
                 )
+                if (showVisibility) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    VisibilityLabel(activity.visibility)
+                }
                 distanceKm?.let {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -336,6 +397,34 @@ fun ActivityCard(
 }
 
 
+@Composable
+private fun VisibilityLabel(visibility: ActivityVisibility) {
+    val isPublic = visibility == ActivityVisibility.PUBLIC
+    val color = if (isPublic) Coral else Color(0xFF666666)
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.12f))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (isPublic) Icons.Filled.Public else Icons.Filled.Lock,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(12.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = if (isPublic) "Public" else "Private",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
+    }
+}
+
+
 private data class MyActivitiesNavItem(
     val label: String,
     val icon: ImageVector
@@ -344,7 +433,7 @@ private data class MyActivitiesNavItem(
 private val myActivitiesNavItems = listOf(
     MyActivitiesNavItem("Explore", Icons.Filled.Explore),
     MyActivitiesNavItem("My Plans", Icons.Filled.CalendarMonth),
-    MyActivitiesNavItem("My Activities", Icons.Filled.Checklist),
+    MyActivitiesNavItem("Activities", Icons.Filled.Checklist),
     MyActivitiesNavItem("My Crew", Icons.Filled.Groups),
     MyActivitiesNavItem("My Profile", Icons.Filled.Person)
 )

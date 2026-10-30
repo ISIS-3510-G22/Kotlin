@@ -347,7 +347,7 @@ private data class MyCrewNavItem(
 private val myCrewNavItems = listOf(
     MyCrewNavItem("Explore", Icons.Filled.Explore),
     MyCrewNavItem("My Plans", Icons.Filled.CalendarMonth),
-    MyCrewNavItem("My Activities", Icons.Filled.Checklist),
+    MyCrewNavItem("Activities", Icons.Filled.Checklist),
     MyCrewNavItem("My Crew", Icons.Filled.Groups),
     MyCrewNavItem("My Profile", Icons.Filled.Person)
 )
