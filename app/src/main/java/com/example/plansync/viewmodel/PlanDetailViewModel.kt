@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.AnalyticsRepository
+import com.example.plansync.data.PlanDatabase
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.model.PendingAction
 import com.example.plansync.service.NetworkMonitor
@@ -13,27 +14,44 @@ import com.example.plansync.service.OfflineSyncService
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
 import com.example.plansync.model.RsvpStatus
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 
 class PlanDetailViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = PlanRepository()
+    private val repository = PlanRepository(planDao = PlanDatabase.get(application).planDao())
     private val analyticsRepository = AnalyticsRepository()
     private val notificationService = NotificationService(application)
+    private val networkMonitor = NetworkMonitor.get(application)
 
-    
+    private var currentPlanId: String? = null
+
     data class UiState(
         val plan: Plan? = null,
         val isLoading: Boolean = false,
         val errorMessage: String? = null,
         val showRsvpDialog: Boolean = false,
-        val pendingSync: Boolean = false
+        val pendingSync: Boolean = false,
+        val neverLoaded: Boolean = false
     )
+
+    init {
+        // Reload when coming back online (only fires on false→true transitions)
+        viewModelScope.launch {
+            networkMonitor.isOnline
+                .distinctUntilChanged()
+                .filter { it }
+                .collect { currentPlanId?.let { id -> loadPlan(id) } }
+        }
+    }
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -64,7 +82,7 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
 
     private fun setRsvpWithOfflineFallback(planId: String, status: RsvpStatus) {
         viewModelScope.launch {
-            if (!NetworkMonitor.get(getApplication()).isCurrentlyOnline()) {
+            if (!networkMonitor.isCurrentlyOnline()) {
                 OfflineSyncService.enqueue(PendingAction.SetRsvp(planId, status.value))
                 _uiState.update { it.copy(pendingSync = true) }
                 return@launch
@@ -80,10 +98,14 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun loadPlan(planId: String) {
+        currentPlanId = planId
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, neverLoaded = false) }
 
-            repository.getPlan(planId)
+            // IO: Room read + Firestore fetch; back on Main to update StateFlow
+            val result = withContext(Dispatchers.IO) { repository.getPlan(planId) }
+
+            result
                 .onSuccess { plan ->
                     _uiState.update {
                         it.copy(
@@ -94,7 +116,14 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
                     }
                 }
                 .onFailure { error ->
-                    _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+                    val neverLoaded = error.message == "connect_to_load"
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = if (neverLoaded) null else error.message,
+                            neverLoaded = neverLoaded
+                        )
+                    }
                 }
         }
     }

@@ -114,6 +114,16 @@ fun PlanDetailScreen(
                     CircularProgressIndicator(color = Coral)
                 }
             }
+            uiState.neverLoaded -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Connect to the internet to load this plan.",
+                        color = Color(0xFF888888),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
+                }
+            }
             uiState.errorMessage != null -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
