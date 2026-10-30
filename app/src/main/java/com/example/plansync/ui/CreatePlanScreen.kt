@@ -190,9 +190,14 @@ fun CreatePlanScreen(
     // Offline-queued banner — shown after a write is queued while offline
     if (uiState.pendingSync) {
         AlertDialog(
-            onDismissRequest = {},
+            onDismissRequest = { viewModel.onPendingSyncDismissed() },
             confirmButton = {
                 TextButton(onClick = onSaved) { Text("OK", color = Coral) }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.onPendingSyncDismissed() }) {
+                    Text("Stay", color = Color(0xFF888888))
+                }
             },
             title = { Text("Saved offline") },
             text  = { Text("Your plan has been queued and will sync automatically when you're back online.") }

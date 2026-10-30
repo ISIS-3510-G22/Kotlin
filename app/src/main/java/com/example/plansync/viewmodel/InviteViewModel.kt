@@ -64,7 +64,11 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
             networkMonitor.isOnline
                 .distinctUntilChanged()
                 .filter { it }
-                .collect { currentPlanId?.let { id -> loadContacts(id) } }
+                .collect {
+                    OfflineSyncService.syncNow()
+                    currentPlanId?.let { id -> loadContacts(id) }
+                    _uiState.update { it.copy(pendingSync = OfflineSyncService.hasPendingActions()) }
+                }
         }
         viewModelScope.launch {
             OfflineSyncService.syncErrors.collect { msg ->
