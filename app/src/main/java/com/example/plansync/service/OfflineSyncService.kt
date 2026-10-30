@@ -66,6 +66,17 @@ object OfflineSyncService {
         return updated
     }
 
+    suspend fun deleteActivityOffline(activity: Activity) {
+        val related = pendingActions.getAll().filter {
+            (it is PendingAction.SaveActivity && it.activityId == activity.id) ||
+                (it is PendingAction.SetLiked && it.activityId == activity.id)
+        }
+        val neverUploaded = related.any { it is PendingAction.SaveActivity && it.isNew }
+        related.forEach { pendingActions.remove(it.id) }
+        if (!neverUploaded) pendingActions.add(PendingAction.DeleteActivity(activity.id, activity.photoUrl))
+        activityRepository.removeCachedActivity(activity.id)
+    }
+
     suspend fun createPlanOffline(action: PendingAction.CreatePlan) {
         pendingActions.add(action)
     }
@@ -87,6 +98,7 @@ object OfflineSyncService {
             when (action) {
                 is PendingAction.SaveActivity -> cached[action.activityId]?.let { result[it.id] = it }
                 is PendingAction.SetLiked -> result[action.activityId]?.let { result[it.id] = it.withLike(action.liked) }
+                is PendingAction.DeleteActivity -> result.remove(action.activityId)
                 else -> Unit
             }
         }
@@ -142,6 +154,8 @@ object OfflineSyncService {
             ).isSuccess
         }
         is PendingAction.SetLiked -> activityRepository.setLiked(action.activityId, action.liked).isSuccess
+        is PendingAction.DeleteActivity ->
+            activityRepository.deleteActivity(action.activityId, action.photoUrl).isSuccess
         is PendingAction.UpdateProfile ->
             profileRepository.updateProfile(action.name, action.lastName, action.phone) == WriteResult.Committed
         is PendingAction.AddPaymentMethod ->

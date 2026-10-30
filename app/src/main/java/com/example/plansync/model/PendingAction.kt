@@ -26,6 +26,12 @@ sealed class PendingAction {
         override val id: String = UUID.randomUUID().toString()
     ) : PendingAction()
 
+    data class DeleteActivity(
+        val activityId: String,
+        val photoUrl: String,
+        override val id: String = UUID.randomUUID().toString()
+    ) : PendingAction()
+
     data class UpdateProfile(
         val name: String,
         val lastName: String,

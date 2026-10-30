@@ -25,6 +25,12 @@ class StorageRepository(
         }
     }
 
+    suspend fun deleteImage(url: String): Result<Unit> = suspendCancellableCoroutine { continuation ->
+        storage.getReferenceFromUrl(url).delete()
+            .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
+            .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
+    }
+
     fun downloadToFile(url: String, file: File) {
         URL(url).openStream().use { input ->
             file.outputStream().use { output -> input.copyTo(output) }
