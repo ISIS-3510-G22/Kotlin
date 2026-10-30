@@ -44,11 +44,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.collectAsState
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.plansync.service.NetworkMonitor
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.ui.theme.CoralLight
 import com.example.plansync.viewmodel.LoginViewModel
@@ -61,8 +58,6 @@ fun LoginScreen(
     onSignUpClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val isOnline by NetworkMonitor.get(context).isOnline.collectAsState(initial = true)
 
     // LaunchedEffect ensures onLoginSuccess() is called exactly once when
     // loggedInUser transitions from null to a value, avoiding side-effects
@@ -85,7 +80,7 @@ fun LoginScreen(
         contentAlignment = Alignment.Center
     ) {
         OfflineBanner(
-            isOnline = isOnline,
+            isOnline = !uiState.isOffline,
             message  = "You're offline — login requires a connection",
             modifier = Modifier.align(Alignment.TopCenter)
         )

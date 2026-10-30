@@ -68,9 +68,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.plansync.model.Activity
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.CreatePlanViewModel
-import com.example.plansync.service.NetworkMonitor
-import androidx.compose.runtime.collectAsState
-import androidx.compose.ui.platform.LocalContext
 import java.util.Calendar
 import java.util.TimeZone
 
@@ -99,8 +96,6 @@ fun CreatePlanScreen(
     onSaved: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val isOnline by NetworkMonitor.get(context).isOnline.collectAsState(initial = true)
 
     LaunchedEffect(preselectedActivityId) {
         if (preselectedActivityId != null) viewModel.preSelectActivity(preselectedActivityId)
@@ -209,7 +204,7 @@ fun CreatePlanScreen(
         topBar = {
             Column {
                 CreatePlanTopBar(onBack = onBack)
-                OfflineBanner(isOnline = isOnline, message = "You're offline — plan will save when reconnected")
+                OfflineBanner(isOnline = uiState.isOnline, message = "You're offline — plan will save when reconnected")
             }
         },
         bottomBar = {
