@@ -57,6 +57,11 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
                 .filter { it }
                 .collect { currentPlanId?.let { id -> loadPlan(id) } }
         }
+        viewModelScope.launch {
+            OfflineSyncService.syncErrors.collect { msg ->
+                _uiState.update { it.copy(errorMessage = msg) }
+            }
+        }
     }
 
     private val _uiState = MutableStateFlow(UiState())
