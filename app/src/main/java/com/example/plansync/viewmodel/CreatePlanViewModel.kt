@@ -17,6 +17,8 @@ import com.google.firebase.Timestamp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -93,6 +95,13 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         loadRecommendedActivities()
         loadDraft()
         loadPopularDays()
+        // Reload activity list on reconnect so the picker isn't stuck on the cached set
+        viewModelScope.launch {
+            networkMonitor.isOnline
+                .distinctUntilChanged()
+                .filter { it }
+                .collect { loadAvailableActivities() }
+        }
     }
 
     // ── Init ───────────────────────────────────────────────────────────────────

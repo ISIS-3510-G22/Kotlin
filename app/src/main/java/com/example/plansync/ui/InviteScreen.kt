@@ -156,6 +156,17 @@ fun InviteScreen(
                     CircularProgressIndicator()
                 }
             }
+            uiState.neverCached -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "You're offline and no contacts are cached yet.\nConnect to load your friends list.",
+                        color = Color(0xFF888888),
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    )
+                }
+            }
             else -> {
                 LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
