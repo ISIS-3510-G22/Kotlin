@@ -3,6 +3,7 @@ package com.example.plansync.service
 import android.content.Context
 import com.example.plansync.data.ActivityRepository
 import com.example.plansync.data.PendingActionRepository
+import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.ProfileRepository
 import com.example.plansync.data.WriteResult
 import com.example.plansync.model.Activity
@@ -20,6 +21,7 @@ object OfflineSyncService {
     private val pendingActions = PendingActionRepository()
     private val activityRepository = ActivityRepository()
     private val profileRepository = ProfileRepository()
+    private val planRepository = PlanRepository()
     private lateinit var locationService: LocationService
     private val mutex = Mutex()
 
@@ -58,6 +60,10 @@ object OfflineSyncService {
         val updated = activity.withLike(liked)
         activityRepository.cacheActivity(updated)
         return updated
+    }
+
+    suspend fun createPlanOffline(action: PendingAction.CreatePlan) {
+        pendingActions.add(action)
     }
 
     suspend fun enqueue(action: PendingAction) = pendingActions.add(action)
@@ -130,6 +136,24 @@ object OfflineSyncService {
             profileRepository.addPaymentMethod(action.method) == WriteResult.Committed
         is PendingAction.DeletePaymentMethod ->
             profileRepository.deletePaymentMethod(action.method) == WriteResult.Committed
+        is PendingAction.CreatePlan -> {
+            val cal = java.util.Calendar.getInstance().apply {
+                timeInMillis = action.dateMillis
+                set(java.util.Calendar.HOUR_OF_DAY, action.hour)
+                set(java.util.Calendar.MINUTE, action.minute)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }
+            planRepository.createPlan(
+                name        = action.name,
+                date        = com.google.firebase.Timestamp(cal.time),
+                isPublic    = action.isPublic,
+                activityIds = action.activityIds,
+                tags        = action.tags,
+                origin      = action.origin,
+                sourceId    = action.sourceId
+            ).isSuccess
+        }
     }
 
     private fun Activity.withLike(liked: Boolean): Activity {

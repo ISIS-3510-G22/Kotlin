@@ -42,4 +42,17 @@ sealed class PendingAction {
         val method: PaymentMethod,
         override val id: String = UUID.randomUUID().toString()
     ) : PendingAction()
+
+    data class CreatePlan(
+        val name: String,
+        val dateMillis: Long,
+        val hour: Int,
+        val minute: Int,
+        val isPublic: Boolean,
+        val activityIds: List<String>,
+        val tags: List<String>,
+        val origin: String?,
+        val sourceId: String?,
+        override val id: String = UUID.randomUUID().toString()
+    ) : PendingAction()
 }

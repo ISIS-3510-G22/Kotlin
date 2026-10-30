@@ -68,6 +68,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.plansync.model.Activity
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.CreatePlanViewModel
+import com.example.plansync.service.NetworkMonitor
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
 import java.util.Calendar
 import java.util.TimeZone
 
@@ -90,14 +93,21 @@ import java.util.TimeZone
 fun CreatePlanScreen(
     viewModel: CreatePlanViewModel = viewModel(),
     preselectedActivityId: String? = null,
+    origin: String? = null,
+    sourceId: String? = null,
     onBack: () -> Unit = {},
     onSaved: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val isOnline by NetworkMonitor.get(context).isOnline.collectAsState(initial = true)
 
-    // Pre-select activity if navigated from "Add to Plan"
     LaunchedEffect(preselectedActivityId) {
         if (preselectedActivityId != null) viewModel.preSelectActivity(preselectedActivityId)
+    }
+
+    LaunchedEffect(origin, sourceId) {
+        viewModel.setOrigin(origin, sourceId)
     }
 
     LaunchedEffect(uiState.isSaved) {
@@ -182,9 +192,26 @@ fun CreatePlanScreen(
         )
     }
 
+    // Offline-queued banner — shown after a write is queued while offline
+    if (uiState.pendingSync) {
+        AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {
+                TextButton(onClick = onSaved) { Text("OK", color = Coral) }
+            },
+            title = { Text("Saved offline") },
+            text  = { Text("Your plan has been queued and will sync automatically when you're back online.") }
+        )
+    }
+
     Scaffold(
         containerColor = Color(0xFFF5F5F5),
-        topBar = { CreatePlanTopBar(onBack = onBack) },
+        topBar = {
+            Column {
+                CreatePlanTopBar(onBack = onBack)
+                OfflineBanner(isOnline = isOnline, message = "You're offline — plan will save when reconnected")
+            }
+        },
         bottomBar = {
             CreatePlanBottomBar(
                 isLoading = uiState.isLoading,

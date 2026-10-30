@@ -41,13 +41,15 @@ class PlanRepository(
         date: Timestamp,
         isPublic: Boolean,
         activityIds: List<String>,
-        tags: List<String>
+        tags: List<String>,
+        origin: String? = null,
+        sourceId: String? = null
     ): Result<String> {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
         return suspendCancellableCoroutine { continuation ->
-            val data = hashMapOf(
+            val data = hashMapOf<String, Any?>(
                 "name"             to name,
                 "date"             to date,
                 "isPublic"         to isPublic,
@@ -56,7 +58,11 @@ class PlanRepository(
                 "activityIds"      to activityIds,
                 "tags"             to tags,
                 "invitations"      to listOf(mapOf("userId" to uid, "rsvp" to "going"))
-            )
+            ).apply {
+                // Optional fields read by Valentina's Type 3 BQ — Flutter ignores unknown fields.
+                origin?.let   { put("origin", it) }
+                sourceId?.let { put("sourceId", it) }
+            }
             db.collection("plans").add(data)
                 .addOnSuccessListener { ref -> continuation.resume(Result.success(ref.id)) }
                 .addOnFailureListener { e  -> continuation.resume(Result.failure(e)) }
