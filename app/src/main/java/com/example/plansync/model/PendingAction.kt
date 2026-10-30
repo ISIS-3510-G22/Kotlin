@@ -50,6 +50,7 @@ sealed class PendingAction {
     ) : PendingAction()
 
     data class CreatePlan(
+        val planId: String = UUID.randomUUID().toString(),
         val name: String,
         val dateMillis: Long,
         val hour: Int,
