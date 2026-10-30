@@ -457,7 +457,12 @@ private fun ParticipantAvatar(participant: Participant) {
         }
         if (participant.photoUrl.isNotBlank()) {
             AsyncImage(
-                model = participant.photoUrl,
+                model = coil.request.ImageRequest.Builder(LocalContext.current)
+                    .data(participant.photoUrl)
+                    .memoryCacheKey(participant.id)
+                    .diskCacheKey(participant.id)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()

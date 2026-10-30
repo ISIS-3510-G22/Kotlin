@@ -428,7 +428,15 @@ class PlanRepository(
     private suspend fun fetchGoingParticipants(goingIds: List<String>): List<Participant> {
         if (goingIds.isEmpty()) return emptyList()
         val participants = mutableListOf<Participant>()
-        goingIds.chunked(10).forEach { batch ->
+        val uncachedIds = mutableListOf<String>()
+
+        // LRU cache check — serve warm profiles without a Firestore round-trip
+        goingIds.forEach { uid ->
+            val cached = UserProfileCache.get(uid)
+            if (cached != null) participants.add(cached) else uncachedIds.add(uid)
+        }
+
+        uncachedIds.chunked(10).forEach { batch ->
             suspendCancellableCoroutine<Unit> { cont ->
                 db.collection("users")
                     .whereIn(FieldPath.documentId(), batch)
@@ -437,14 +445,14 @@ class PlanRepository(
                         snapshot.documents.forEach { doc ->
                             val name = doc.getString("name").orEmpty()
                             val lastName = doc.getString("lastName").orEmpty()
-                            participants.add(
-                                Participant(
-                                    id = doc.id,
-                                    initials = buildInitials(name, lastName),
-                                    avatarColorIndex = participants.size % 4,
-                                    photoUrl = doc.getString("photoUrl").orEmpty()
-                                )
+                            val p = Participant(
+                                id = doc.id,
+                                initials = buildInitials(name, lastName),
+                                avatarColorIndex = participants.size % 4,
+                                photoUrl = doc.getString("photoUrl").orEmpty()
                             )
+                            UserProfileCache.put(doc.id, p)
+                            participants.add(p)
                         }
                         cont.resume(Unit)
                     }
