@@ -2,11 +2,13 @@ package com.example.plansync.data
 
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import com.example.plansync.model.Contact
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 
@@ -41,7 +43,7 @@ class InviteRepository(
 
     private suspend fun fetchFromFirestore(uid: String, planId: String): List<Contact> {
         val invitedIds = suspendCancellableCoroutine<Set<String>> { cont ->
-            db.collection("plans").document(planId).get()
+            db.collection("plans").document(planId).get(Source.SERVER)
                 .addOnSuccessListener { doc ->
                     val raw = (doc.get("invitations") as? List<*>).orEmpty()
                     val ids = raw.mapNotNull { e ->
@@ -53,29 +55,29 @@ class InviteRepository(
                     }.toSet()
                     cont.resume(ids)
                 }
-                .addOnFailureListener { cont.resume(emptySet()) }
+                .addOnFailureListener { cont.resumeWithException(it) }
         }
 
         val friendIds = mutableSetOf<String>()
         suspendCancellableCoroutine<Unit> { cont ->
             db.collection("friendRequests")
                 .whereEqualTo("fromUserId", uid).whereEqualTo("status", "accepted")
-                .get()
+                .get(Source.SERVER)
                 .addOnSuccessListener { snap ->
                     snap.documents.forEach { doc -> doc.getString("toUserId")?.let { friendIds.add(it) } }
                     cont.resume(Unit)
                 }
-                .addOnFailureListener { cont.resume(Unit) }
+                .addOnFailureListener { cont.resumeWithException(it) }
         }
         suspendCancellableCoroutine<Unit> { cont ->
             db.collection("friendRequests")
                 .whereEqualTo("toUserId", uid).whereEqualTo("status", "accepted")
-                .get()
+                .get(Source.SERVER)
                 .addOnSuccessListener { snap ->
                     snap.documents.forEach { doc -> doc.getString("fromUserId")?.let { friendIds.add(it) } }
                     cont.resume(Unit)
                 }
-                .addOnFailureListener { cont.resume(Unit) }
+                .addOnFailureListener { cont.resumeWithException(it) }
         }
 
         val allIds = friendIds.toList()
@@ -84,7 +86,7 @@ class InviteRepository(
         val contacts = mutableListOf<Contact>()
         allIds.chunked(10).forEach { batch ->
             suspendCancellableCoroutine<Unit> { cont ->
-                db.collection("users").whereIn(FieldPath.documentId(), batch).get()
+                db.collection("users").whereIn(FieldPath.documentId(), batch).get(Source.SERVER)
                     .addOnSuccessListener { snap ->
                         snap.documents.forEach { doc ->
                             val name = doc.getString("name").orEmpty()
@@ -102,7 +104,7 @@ class InviteRepository(
                         }
                         cont.resume(Unit)
                     }
-                    .addOnFailureListener { cont.resume(Unit) }
+                    .addOnFailureListener { cont.resumeWithException(it) }
             }
         }
         return contacts

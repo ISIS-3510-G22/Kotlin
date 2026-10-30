@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,10 +42,14 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
         val errorMessage: String? = null,
         val showRsvpDialog: Boolean = false,
         val pendingSync: Boolean = false,
-        val neverLoaded: Boolean = false
+        val neverLoaded: Boolean = false,
+        val isOnline: Boolean = true
     )
 
     init {
+        networkMonitor.isOnline
+            .onEach { online -> _uiState.update { it.copy(isOnline = online) } }
+            .launchIn(viewModelScope)
         // Reload when coming back online (only fires on false→true transitions)
         viewModelScope.launch {
             networkMonitor.isOnline
@@ -99,10 +105,9 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
 
     fun loadPlan(planId: String) {
         currentPlanId = planId
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.Main) {
             _uiState.update { it.copy(isLoading = true, errorMessage = null, neverLoaded = false) }
 
-            // IO: Room read + Firestore fetch; back on Main to update StateFlow
             val result = withContext(Dispatchers.IO) { repository.getPlan(planId) }
 
             result

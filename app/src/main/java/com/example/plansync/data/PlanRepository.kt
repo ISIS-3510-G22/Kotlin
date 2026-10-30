@@ -150,7 +150,7 @@ class PlanRepository(
 
     private suspend fun fetchActivity(activityId: String): Activity? =
         suspendCancellableCoroutine { continuation ->
-            db.collection("activities").document(activityId).get()
+            db.collection("activities").document(activityId).get(Source.SERVER)
                 .addOnSuccessListener { doc ->
                     if (!doc.exists()) { continuation.resume(null); return@addOnSuccessListener }
                     val actTags = (doc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()

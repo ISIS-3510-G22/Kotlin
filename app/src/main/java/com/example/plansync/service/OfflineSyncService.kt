@@ -2,16 +2,21 @@ package com.example.plansync.service
 
 import android.content.Context
 import com.example.plansync.data.ActivityRepository
+import com.example.plansync.data.AnalyticsRepository
 import com.example.plansync.data.InviteRepository
 import com.example.plansync.data.PendingActionRepository
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.ProfileRepository
 import com.example.plansync.data.WriteResult
+import com.example.plansync.data.planDateTime
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.PendingAction
 import com.example.plansync.model.User
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -21,12 +26,16 @@ object OfflineSyncService {
 
     private val pendingActions = PendingActionRepository()
     private val activityRepository = ActivityRepository()
+    private val analyticsRepository = AnalyticsRepository()
     private val profileRepository = ProfileRepository()
     private val planRepository = PlanRepository()
     private val inviteRepository = InviteRepository()
     private lateinit var locationService: LocationService
     private lateinit var appContext: Context
     private val mutex = Mutex()
+
+    private val _syncErrors = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val syncErrors: SharedFlow<String> = _syncErrors.asSharedFlow()
 
     fun start(context: Context, scope: CoroutineScope) {
         appContext = context.applicationContext
@@ -127,7 +136,7 @@ object OfflineSyncService {
             if (ok) {
                 pendingActions.remove(action.id)
             } else if (NetworkMonitor.get(appContext).isCurrentlyOnline()) {
-                // Still online but write failed = permanent server rejection; drop it
+                _syncErrors.tryEmit("Sync failed: ${actionLabel(action)} was rejected by the server.")
                 pendingActions.remove(action.id)
             } else {
                 // Went offline mid-sync; stop and retry on next reconnect
@@ -170,24 +179,35 @@ object OfflineSyncService {
         is PendingAction.SendInvite ->
             inviteRepository.inviteContact(action.planId, action.contactId).isSuccess
         is PendingAction.CreatePlan -> {
-            val cal = java.util.Calendar.getInstance().apply {
-                timeInMillis = action.dateMillis
-                set(java.util.Calendar.HOUR_OF_DAY, action.hour)
-                set(java.util.Calendar.MINUTE, action.minute)
-                set(java.util.Calendar.SECOND, 0)
-                set(java.util.Calendar.MILLISECOND, 0)
-            }
-            planRepository.createPlan(
+            val date = planDateTime(action.dateMillis, action.hour, action.minute)
+            val result = planRepository.createPlan(
                 planId      = action.planId,
                 name        = action.name,
-                date        = com.google.firebase.Timestamp(cal.time),
+                date        = com.google.firebase.Timestamp(date),
                 isPublic    = action.isPublic,
                 activityIds = action.activityIds,
                 tags        = action.tags,
                 origin      = action.origin,
                 sourceId    = action.sourceId
-            ).isSuccess
+            )
+            if (result.isSuccess) {
+                analyticsRepository.logEvent(
+                    type          = AnalyticsRepository.PLAN_CREATED,
+                    planId        = action.planId,
+                    origin        = action.origin,
+                    sourceId      = action.sourceId
+                )
+            }
+            result.isSuccess
         }
+    }
+
+    private fun actionLabel(action: PendingAction): String = when (action) {
+        is PendingAction.CreatePlan   -> "Plan \"${action.name}\""
+        is PendingAction.SendInvite   -> "Invite for plan ${action.planId}"
+        is PendingAction.SetRsvp      -> "RSVP for plan ${action.planId}"
+        is PendingAction.SaveActivity -> "Activity \"${action.name}\""
+        else                          -> "queued action"
     }
 
     private fun Activity.withLike(liked: Boolean): Activity {

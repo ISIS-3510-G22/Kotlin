@@ -8,6 +8,7 @@ import com.example.plansync.data.AnalyticsRepository
 import com.example.plansync.data.InsightsRepository
 import com.example.plansync.data.PlanDraftRepository
 import com.example.plansync.data.PlanRepository
+import com.example.plansync.data.planDateTime
 import com.example.plansync.model.Activity
 import com.example.plansync.model.PendingAction
 import com.example.plansync.service.LocationService
@@ -19,10 +20,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -60,6 +62,7 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         val errorMessage: String? = null,
         val isSaved: Boolean = false,
         val pendingSync: Boolean = false,  // queued offline, will sync when back online
+        val isOnline: Boolean = true,
         val origin: String? = null,
         val sourceId: String? = null,
         val popularDayLabel: String? = null
@@ -95,12 +98,20 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         loadRecommendedActivities()
         loadDraft()
         loadPopularDays()
+        networkMonitor.isOnline
+            .onEach { online -> _uiState.update { it.copy(isOnline = online) } }
+            .launchIn(viewModelScope)
         // Reload activity list on reconnect so the picker isn't stuck on the cached set
         viewModelScope.launch {
             networkMonitor.isOnline
                 .distinctUntilChanged()
                 .filter { it }
                 .collect { loadAvailableActivities() }
+        }
+        viewModelScope.launch {
+            OfflineSyncService.syncErrors.collect { msg ->
+                _uiState.update { it.copy(errorMessage = msg) }
+            }
         }
     }
 
@@ -300,15 +311,6 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     // ── Save ───────────────────────────────────────────────────────────────────
-
-    private fun planDateTime(pickedMillis: Long, hour: Int, minute: Int): Date {
-        val picked = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        picked.timeInMillis = pickedMillis
-        val local = Calendar.getInstance()
-        local.clear()
-        local.set(picked.get(Calendar.YEAR), picked.get(Calendar.MONTH), picked.get(Calendar.DAY_OF_MONTH), hour, minute)
-        return local.time
-    }
 
     fun onSavePlan() {
         val state = _uiState.value

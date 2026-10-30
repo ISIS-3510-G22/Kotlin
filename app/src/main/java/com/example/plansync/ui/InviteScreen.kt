@@ -38,11 +38,9 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
-import com.example.plansync.service.NetworkMonitor
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -76,8 +74,6 @@ fun InviteScreen(
     onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val isOnline by NetworkMonitor.get(context).isOnline.collectAsState(initial = true)
 
     LaunchedEffect(planId) {
         viewModel.loadContacts(planId)
@@ -119,9 +115,12 @@ fun InviteScreen(
             )
         }
 
-        OfflineBanner(isOnline = isOnline, message = "You're offline — invites will sync when reconnected")
+        OfflineBanner(isOnline = uiState.isOnline, message = "You're offline — invites will sync when reconnected")
         if (uiState.pendingSync) {
             OfflineBanner(isOnline = false, message = "Invite queued — will be sent when back online")
+        }
+        uiState.errorMessage?.let { msg ->
+            OfflineBanner(isOnline = false, message = msg)
         }
 
         HorizontalDivider(color = Color(0xFFEEEEEE))
@@ -240,8 +239,8 @@ private fun ContactRow(
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(contact.photoUrl)
-                        .memoryCacheKey(contact.id)
-                        .diskCacheKey(contact.id)
+                        .memoryCacheKey(contact.photoUrl)
+                        .diskCacheKey(contact.photoUrl)
                         .crossfade(true)
                         .build(),
                     contentDescription = null,

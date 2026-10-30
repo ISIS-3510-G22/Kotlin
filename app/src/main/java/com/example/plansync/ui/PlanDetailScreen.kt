@@ -47,12 +47,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
-import com.example.plansync.service.NetworkMonitor
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -92,8 +90,6 @@ fun PlanDetailScreen(
     onAddActivity: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val isOnline by NetworkMonitor.get(context).isOnline.collectAsState(initial = true)
 
     LaunchedEffect(planId) {
         viewModel.loadPlan(planId)
@@ -105,7 +101,7 @@ fun PlanDetailScreen(
             .background(Color(0xFFF5F5F5))
     ) {
         PlanDetailTopBar(onBack = onBack)
-        OfflineBanner(isOnline = isOnline, message = "You're offline — showing cached data")
+        OfflineBanner(isOnline = uiState.isOnline, message = "You're offline — showing cached data")
 
         // ── Content: loading / error / data ───────────────────────────────
         when {
@@ -459,8 +455,8 @@ private fun ParticipantAvatar(participant: Participant) {
             AsyncImage(
                 model = coil.request.ImageRequest.Builder(LocalContext.current)
                     .data(participant.photoUrl)
-                    .memoryCacheKey(participant.id)
-                    .diskCacheKey(participant.id)
+                    .memoryCacheKey(participant.photoUrl)
+                    .diskCacheKey(participant.photoUrl)
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
