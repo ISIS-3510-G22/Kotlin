@@ -106,7 +106,11 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
             networkMonitor.isOnline
                 .distinctUntilChanged()
                 .filter { it }
-                .collect { loadAvailableActivities() }
+                .collect {
+                    OfflineSyncService.syncNow()
+                    loadAvailableActivities()
+                    _uiState.update { it.copy(pendingSync = OfflineSyncService.hasPendingActions()) }
+                }
         }
         viewModelScope.launch {
             OfflineSyncService.syncErrors.collect { msg ->
@@ -279,6 +283,8 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun onErrorDismissed() { _uiState.update { it.copy(errorMessage = null) } }
+
+    fun onPendingSyncDismissed() { _uiState.update { it.copy(pendingSync = false) } }
 
     // ── Analytics helpers ──────────────────────────────────────────────────────
 

@@ -55,7 +55,11 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
             networkMonitor.isOnline
                 .distinctUntilChanged()
                 .filter { it }
-                .collect { currentPlanId?.let { id -> loadPlan(id) } }
+                .collect {
+                    OfflineSyncService.syncNow()
+                    currentPlanId?.let { id -> loadPlan(id) }
+                    _uiState.update { it.copy(pendingSync = OfflineSyncService.hasPendingActions()) }
+                }
         }
         viewModelScope.launch {
             OfflineSyncService.syncErrors.collect { msg ->
@@ -137,6 +141,8 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
                 }
         }
     }
+
+    fun onErrorShown() { _uiState.update { it.copy(errorMessage = null) } }
 
     private fun notifyRsvp(event: String) {
         val planName = _uiState.value.plan?.title.orEmpty()
