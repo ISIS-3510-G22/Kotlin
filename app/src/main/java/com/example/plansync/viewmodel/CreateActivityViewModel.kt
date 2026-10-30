@@ -1,6 +1,7 @@
 package com.example.plansync.viewmodel
 
 import android.app.Application
+import android.util.ArrayMap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.ActivityRepository
@@ -22,6 +23,8 @@ import kotlinx.coroutines.launch
 
 val ActivityCategories = listOf("food", "outdoors", "culture", "shopping")
 
+private const val MAX_CACHED_SEARCHES = 30
+
 class CreateActivityViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ActivityRepository()
@@ -29,6 +32,7 @@ class CreateActivityViewModel(application: Application) : AndroidViewModel(appli
     private val placesRepository = PlacesRepository(application)
     private val networkMonitor = NetworkMonitor.get(application)
     private var searchJob: Job? = null
+    private val searchCache = ArrayMap<String, List<PlaceResult>>()
 
     data class UiState(
         val activityId: String? = null,
@@ -98,12 +102,23 @@ class CreateActivityViewModel(application: Application) : AndroidViewModel(appli
             _uiState.update { it.copy(placeSuggestions = emptyList()) }
             return
         }
+        val query = value.trim().lowercase()
+        searchCache[query]?.let { cached ->
+            _uiState.update { it.copy(placeSuggestions = cached) }
+            return
+        }
         searchJob = viewModelScope.launch {
             delay(300)
             val results = placesRepository.search(value.trim(), locationService.currentLocation())
+                .onSuccess { rememberSearch(query, it) }
                 .getOrDefault(emptyList())
             _uiState.update { it.copy(placeSuggestions = results) }
         }
+    }
+
+    private fun rememberSearch(query: String, results: List<PlaceResult>) {
+        if (searchCache.size >= MAX_CACHED_SEARCHES) searchCache.removeAt(0)
+        searchCache[query] = results
     }
 
     fun onPlaceSelected(place: PlaceResult) {
