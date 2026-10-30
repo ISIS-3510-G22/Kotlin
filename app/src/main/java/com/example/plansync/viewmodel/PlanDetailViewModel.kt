@@ -46,6 +46,9 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
         val isOnline: Boolean = true
     )
 
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
     init {
         networkMonitor.isOnline
             .onEach { online -> _uiState.update { it.copy(isOnline = online) } }
@@ -68,10 +71,6 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    private val _uiState = MutableStateFlow(UiState())
-    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
-
-    
     fun onRsvpTriggered() {
         _uiState.update { it.copy(showRsvpDialog = true) }
     }
