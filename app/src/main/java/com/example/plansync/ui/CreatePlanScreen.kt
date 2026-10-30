@@ -432,6 +432,33 @@ fun CreatePlanScreen(
                 }
             }
 
+            // ── Popular day insight ──────────────────────────────────────────
+            uiState.popularDayLabel?.let { day ->
+                item {
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3F0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                            Text(
+                                "INSIGHT",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Coral,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "$day is the most popular day to create plans",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF555555)
+                            )
+                        }
+                    }
+                }
+            }
+
             // ── Cost card ────────────────────────────────────────────────────
             item {
                 Card(

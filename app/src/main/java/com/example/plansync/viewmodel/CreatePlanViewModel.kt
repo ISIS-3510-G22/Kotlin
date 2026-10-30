@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.ActivityRepository
 import com.example.plansync.data.AnalyticsRepository
+import com.example.plansync.data.InsightsRepository
 import com.example.plansync.data.PlanDraftRepository
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.model.Activity
@@ -27,12 +28,13 @@ import java.util.UUID
 
 class CreatePlanViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val planRepository     = PlanRepository()
-    private val activityRepository = ActivityRepository()
+    private val planRepository      = PlanRepository()
+    private val activityRepository  = ActivityRepository()
     private val analyticsRepository = AnalyticsRepository()
-    private val locationService    = LocationService(application)
-    private val draftRepository    = PlanDraftRepository(application)
-    private val networkMonitor     = NetworkMonitor.get(application)
+    private val insightsRepository  = InsightsRepository()
+    private val locationService     = LocationService(application)
+    private val draftRepository     = PlanDraftRepository(application)
+    private val networkMonitor      = NetworkMonitor.get(application)
 
     // Stable for the lifetime of this ViewModel instance — identifies this funnel session.
     private val flowSessionId = UUID.randomUUID().toString()
@@ -57,7 +59,8 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         val isSaved: Boolean = false,
         val pendingSync: Boolean = false,  // queued offline, will sync when back online
         val origin: String? = null,
-        val sourceId: String? = null
+        val sourceId: String? = null,
+        val popularDayLabel: String? = null
     ) {
         val totalEstimatedCost: Double
             get() = selectedActivities.sumOf { it.price.toDouble() }
@@ -89,6 +92,7 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         loadAvailableActivities()
         loadRecommendedActivities()
         loadDraft()
+        loadPopularDays()
     }
 
     // ── Init ───────────────────────────────────────────────────────────────────
@@ -108,6 +112,13 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
                 .onSuccess { activities ->
                     _uiState.update { it.copy(recommendedActivities = activities) }
                 }
+        }
+    }
+
+    private fun loadPopularDays() {
+        viewModelScope.launch {
+            val top = insightsRepository.getPopularDays().firstOrNull()
+            if (top != null) _uiState.update { it.copy(popularDayLabel = top.day) }
         }
     }
 
