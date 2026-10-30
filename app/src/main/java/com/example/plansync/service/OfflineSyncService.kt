@@ -14,10 +14,10 @@ import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.PendingAction
 import com.example.plansync.model.User
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -34,8 +34,8 @@ object OfflineSyncService {
     private lateinit var appContext: Context
     private val mutex = Mutex()
 
-    private val _syncErrors = MutableSharedFlow<String>(extraBufferCapacity = 8)
-    val syncErrors: SharedFlow<String> = _syncErrors.asSharedFlow()
+    private val _syncErrors = Channel<String>(Channel.BUFFERED)
+    val syncErrors: Flow<String> = _syncErrors.receiveAsFlow()
 
     fun start(context: Context, scope: CoroutineScope) {
         appContext = context.applicationContext
@@ -136,7 +136,7 @@ object OfflineSyncService {
             if (ok) {
                 pendingActions.remove(action.id)
             } else if (NetworkMonitor.get(appContext).isCurrentlyOnline()) {
-                _syncErrors.tryEmit("Sync failed: ${actionLabel(action)} was rejected by the server.")
+                _syncErrors.trySend("Sync failed: ${actionLabel(action)} was rejected by the server.")
                 pendingActions.remove(action.id)
             } else {
                 // Went offline mid-sync; stop and retry on next reconnect

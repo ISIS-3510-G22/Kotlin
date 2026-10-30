@@ -21,7 +21,9 @@
 --      Write preference:    Overwrite table
 --   4. A Cloud Function triggered by that table write pushes the result
 --      to Firestore: db.collection("insights").document("popular_days")
---      with field: days = { "Monday": 12, "Saturday": 45, ... }
+--      It filters dimension = 'day_of_week' rows and writes:
+--      days = { "Monday": n, "Saturday": n, ... }
+--      which is the shape InsightsRepository.getPopularDays() already reads.
 --
 -- What must exist in Firebase / BigQuery for insights/popular_days to be written:
 --   a) Firestore BigQuery Export extension installed in plansync-bc8f6
@@ -31,27 +33,42 @@
 --   c) A Cloud Function (Node.js) triggered on BigQuery table write that reads
 --      popular_days_result and writes the days map to Firestore
 --      db.collection("insights").document("popular_days").set({ days: { ... } })
---   (Alternatively, seed the Firestore doc manually for demo purposes.)
 --
 -- The Kotlin app reads that Firestore doc in InsightsRepository.getPopularDays()
 -- and displays the top day in the Create Plan insight card.
 
 SELECT
+  'day_of_week' AS dimension,
   FORMAT_TIMESTAMP('%A',
     TIMESTAMP_SECONDS(CAST(JSON_VALUE(data, '$.date._seconds') AS INT64)),
-    'America/Bogota') AS day_of_week,
+    'America/Bogota') AS value,
+  COUNT(*) AS plan_count
+FROM `plansync-bc8f6.firestore_export.plans_raw_latest`
+WHERE JSON_VALUE(data, '$.date._seconds') IS NOT NULL
+GROUP BY value
+
+UNION ALL
+
+SELECT
+  'month' AS dimension,
   FORMAT_TIMESTAMP('%B',
     TIMESTAMP_SECONDS(CAST(JSON_VALUE(data, '$.date._seconds') AS INT64)),
-    'America/Bogota') AS month,
-  EXTRACT(YEAR FROM
-    TIMESTAMP_SECONDS(CAST(JSON_VALUE(data, '$.date._seconds') AS INT64))
-    AT TIME ZONE 'America/Bogota') AS year,
+    'America/Bogota') AS value,
   COUNT(*) AS plan_count
-FROM
-  `plansync-bc8f6.firestore_export.plans_raw_latest`
-WHERE
-  JSON_VALUE(data, '$.date._seconds') IS NOT NULL
-GROUP BY
-  day_of_week, month, year
-ORDER BY
-  plan_count DESC
+FROM `plansync-bc8f6.firestore_export.plans_raw_latest`
+WHERE JSON_VALUE(data, '$.date._seconds') IS NOT NULL
+GROUP BY value
+
+UNION ALL
+
+SELECT
+  'year' AS dimension,
+  CAST(EXTRACT(YEAR FROM
+    TIMESTAMP_SECONDS(CAST(JSON_VALUE(data, '$.date._seconds') AS INT64))
+    AT TIME ZONE 'America/Bogota') AS STRING) AS value,
+  COUNT(*) AS plan_count
+FROM `plansync-bc8f6.firestore_export.plans_raw_latest`
+WHERE JSON_VALUE(data, '$.date._seconds') IS NOT NULL
+GROUP BY value
+
+ORDER BY dimension, plan_count DESC
