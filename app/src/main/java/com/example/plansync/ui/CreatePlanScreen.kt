@@ -505,7 +505,7 @@ private fun ActivityPickerDialog(
         title = { Text("Add Activities", fontWeight = FontWeight.Bold) },
         text = {
             if (available.isEmpty()) {
-                Text("No activities found. Create some in My Activities first.", color = Color(0xFF888888))
+                Text("No activities found. Create some in Activities first.", color = Color(0xFF888888))
             } else {
                 Column {
                     available.forEach { activity ->

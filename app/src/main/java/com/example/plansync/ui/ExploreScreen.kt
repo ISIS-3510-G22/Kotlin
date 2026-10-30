@@ -418,7 +418,7 @@ private data class NavItem(
 private val bottomNavItems = listOf(
     NavItem("Explore", Icons.Filled.Explore),
     NavItem("My Plans", Icons.Filled.CalendarMonth),
-    NavItem("My Activities", Icons.Filled.Checklist),
+    NavItem("Activities", Icons.Filled.Checklist),
     NavItem("My Crew", Icons.Filled.Groups),
     NavItem("My Profile", Icons.Filled.Person)
 )

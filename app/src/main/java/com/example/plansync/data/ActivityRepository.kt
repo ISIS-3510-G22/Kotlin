@@ -116,7 +116,7 @@ class ActivityRepository(
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
 
-    suspend fun getRecommended(): Result<List<Activity>> = runCatching {
+    suspend fun getRecommendedIds(): Result<List<String>> = runCatching {
         val uid = auth.currentUser?.uid ?: throw Exception("No active session.")
         val runId = recommendationRuns.document("latest").get().await().getString("latestRunId")
             ?: return@runCatching emptyList()
@@ -127,7 +127,11 @@ class ActivityRepository(
             .await()
         val idsMap = output.documents.firstOrNull()?.get("activity_ids") as? Map<*, *>
             ?: return@runCatching emptyList()
-        val ids = List(idsMap.size) { i -> idsMap[i.toString()] as String }
+        List(idsMap.size) { i -> idsMap[i.toString()] as String }
+    }
+
+    suspend fun getRecommended(): Result<List<Activity>> = runCatching {
+        val ids = getRecommendedIds().getOrThrow()
         if (ids.isEmpty()) return@runCatching emptyList()
         activities.whereIn(FieldPath.documentId(), ids).get().await()
             .documents.map { it.toActivity() }

@@ -534,7 +534,7 @@ private data class MyPlansNavItem(
 private val myPlansNavItems = listOf(
     MyPlansNavItem("Explore", Icons.Filled.Explore),
     MyPlansNavItem("My Plans", Icons.Filled.CalendarMonth),
-    MyPlansNavItem("My Activities", Icons.Filled.Checklist),
+    MyPlansNavItem("Activities", Icons.Filled.Checklist),
     MyPlansNavItem("My Crew", Icons.Filled.Groups),
     MyPlansNavItem("My Profile", Icons.Filled.Person)
 )
