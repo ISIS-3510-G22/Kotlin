@@ -24,6 +24,8 @@ import kotlinx.coroutines.launch
 val ActivityCategories = listOf("food", "outdoors", "culture", "shopping")
 
 private const val MAX_CACHED_SEARCHES = 30
+private const val MAX_TAG_LENGTH = 20
+private val validTag = Regex("^[\\p{L}\\p{N}]+([ -][\\p{L}\\p{N}]+)*$")
 
 class CreateActivityViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -45,6 +47,7 @@ class CreateActivityViewModel(application: Application) : AndroidViewModel(appli
         val expectedPrice: String = "",
         val tags: List<String> = emptyList(),
         val customTag: String = "",
+        val tagError: String? = null,
         val notes: String = "",
         val visibility: ActivityVisibility = ActivityVisibility.PRIVATE,
         val isSaving: Boolean = false,
@@ -146,13 +149,22 @@ class CreateActivityViewModel(application: Application) : AndroidViewModel(appli
         it.copy(tags = if (tag in it.tags) it.tags - tag else it.tags + tag)
     }
 
-    fun onCustomTagChange(value: String) = _uiState.update { it.copy(customTag = value) }
+    fun onCustomTagChange(value: String) = _uiState.update { it.copy(customTag = value, tagError = null) }
 
     fun addCustomTag() {
-        val tag = _uiState.value.customTag.trim().lowercase()
-        if (tag.isBlank()) return
+        val tag = _uiState.value.customTag.trim().replace(Regex("\\s+"), " ").lowercase()
+        val error = when {
+            tag.isEmpty() -> "Type a tag first."
+            tag.length > MAX_TAG_LENGTH -> "Tags can have up to $MAX_TAG_LENGTH characters."
+            !validTag.matches(tag) -> "Tags can only have letters, numbers, spaces and hyphens."
+            else -> null
+        }
+        if (error != null) {
+            _uiState.update { it.copy(tagError = error) }
+            return
+        }
         _uiState.update {
-            it.copy(tags = if (tag in it.tags) it.tags else it.tags + tag, customTag = "")
+            it.copy(tags = if (tag in it.tags) it.tags else it.tags + tag, customTag = "", tagError = null)
         }
     }
 

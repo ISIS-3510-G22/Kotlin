@@ -159,6 +159,14 @@ fun CreateActivityScreen(
                         Icon(Icons.Filled.Add, contentDescription = "Add tag", tint = Coral)
                     }
                 }
+                uiState.tagError?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
 
             item {

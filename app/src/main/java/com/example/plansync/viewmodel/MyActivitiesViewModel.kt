@@ -153,6 +153,7 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
 
     private fun tagsByPopularity(activities: List<Activity>): List<String> =
         activities.flatMap { it.tags }
+            .filter { it.isNotBlank() }
             .groupingBy { it }
             .eachCount()
             .entries
