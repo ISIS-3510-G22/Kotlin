@@ -8,22 +8,38 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
 
-/**
- * Data layer — Repository pattern.
- * Single source of truth for invite-related operations.
- */
 class InviteRepository(
     private val db: FirebaseFirestore = FirebaseProvider.firestore,
-    private val auth: FirebaseAuth = FirebaseProvider.auth
+    private val auth: FirebaseAuth = FirebaseProvider.auth,
+    private val storage: LocalStorageProvider = LocalStorageProvider
 ) {
 
+    private fun contactsFile() = auth.currentUser?.uid?.let { "contacts_$it.json" }
 
-    /** Returns friends of the current user as suggested contacts, marking those already invited to [planId]. */
+    // Local storage strategy — own JSON file per user for offline contact list.
     suspend fun getSuggestedContacts(planId: String): List<Contact> {
         val uid = auth.currentUser?.uid ?: return emptyList()
 
-        // Fetch existing invitations for this plan to mark already-invited contacts
+        val fresh: List<Contact>? = try {
+            withTimeout(8_000) { fetchFromFirestore(uid, planId) }
+        } catch (_: Exception) { null }
+
+        if (fresh != null) {
+            // Cache without isInvited — that's plan-specific, resolved on read
+            contactsFile()?.let { file ->
+                storage.write(file, fresh.map { it.copy(isInvited = false) }.toJsonString { it.toJson() })
+            }
+            return fresh
+        }
+
+        // Offline: serve from own JSON file
+        val file = contactsFile() ?: return emptyList()
+        return storage.read(file).toJsonList { it.toContact() }
+    }
+
+    private suspend fun fetchFromFirestore(uid: String, planId: String): List<Contact> {
         val invitedIds = suspendCancellableCoroutine<Set<String>> { cont ->
             db.collection("plans").document(planId).get()
                 .addOnSuccessListener { doc ->
@@ -40,7 +56,6 @@ class InviteRepository(
                 .addOnFailureListener { cont.resume(emptySet()) }
         }
 
-        // Collect friend IDs from friendRequests (accepted requests in both directions)
         val friendIds = mutableSetOf<String>()
         suspendCancellableCoroutine<Unit> { cont ->
             db.collection("friendRequests")
@@ -66,7 +81,6 @@ class InviteRepository(
         val allIds = friendIds.toList()
         if (allIds.isEmpty()) return emptyList()
 
-        // Fetch user documents in batches of 10
         val contacts = mutableListOf<Contact>()
         allIds.chunked(10).forEach { batch ->
             suspendCancellableCoroutine<Unit> { cont ->
@@ -82,7 +96,8 @@ class InviteRepository(
                                 name = displayName.ifBlank { email },
                                 handle = if (email.isNotBlank()) "@${email.substringBefore("@")}" else null,
                                 isGroup = false,
-                                isInvited = doc.id in invitedIds
+                                isInvited = doc.id in invitedIds,
+                                photoUrl = doc.getString("photoUrl").orEmpty()
                             ))
                         }
                         cont.resume(Unit)
@@ -93,7 +108,6 @@ class InviteRepository(
         return contacts
     }
 
-    /** Adds the invitee to participantsIds and writes a {userId, rsvp, invitedAt} map entry. */
     suspend fun inviteContact(planId: String, contactId: String): Result<Unit> =
         suspendCancellableCoroutine { continuation ->
             val invitationEntry = hashMapOf(

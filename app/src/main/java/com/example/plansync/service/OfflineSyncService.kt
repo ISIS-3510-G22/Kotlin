@@ -2,6 +2,7 @@ package com.example.plansync.service
 
 import android.content.Context
 import com.example.plansync.data.ActivityRepository
+import com.example.plansync.data.InviteRepository
 import com.example.plansync.data.PendingActionRepository
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.ProfileRepository
@@ -22,10 +23,13 @@ object OfflineSyncService {
     private val activityRepository = ActivityRepository()
     private val profileRepository = ProfileRepository()
     private val planRepository = PlanRepository()
+    private val inviteRepository = InviteRepository()
     private lateinit var locationService: LocationService
+    private lateinit var appContext: Context
     private val mutex = Mutex()
 
     fun start(context: Context, scope: CoroutineScope) {
+        appContext = context.applicationContext
         locationService = LocationService(context.applicationContext)
         scope.launch {
             NetworkMonitor.get(context).isOnline.filter { it }.collect { syncNow() }
@@ -107,8 +111,16 @@ object OfflineSyncService {
 
     suspend fun syncNow() = mutex.withLock {
         for (action in pendingActions.getAll()) {
-            if (!upload(action)) break
-            pendingActions.remove(action.id)
+            val ok = upload(action)
+            if (ok) {
+                pendingActions.remove(action.id)
+            } else if (NetworkMonitor.get(appContext).isCurrentlyOnline()) {
+                // Still online but write failed = permanent server rejection; drop it
+                pendingActions.remove(action.id)
+            } else {
+                // Went offline mid-sync; stop and retry on next reconnect
+                break
+            }
         }
     }
 
@@ -141,6 +153,8 @@ object OfflineSyncService {
                 ?: return false
             planRepository.setRsvp(action.planId, status).isSuccess
         }
+        is PendingAction.SendInvite ->
+            inviteRepository.inviteContact(action.planId, action.contactId).isSuccess
         is PendingAction.CreatePlan -> {
             val cal = java.util.Calendar.getInstance().apply {
                 timeInMillis = action.dateMillis
