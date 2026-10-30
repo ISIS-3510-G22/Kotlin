@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.example.plansync.model.PaymentMethod
 import com.example.plansync.model.PaymentMethodType
 import com.example.plansync.ui.theme.Coral
@@ -170,8 +169,8 @@ fun EditProfileScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     if (uiState.photoUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = uiState.photoUrl,
+                        CachedImage(
+                            url = uiState.photoUrl,
                             contentDescription = "Profile photo",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()

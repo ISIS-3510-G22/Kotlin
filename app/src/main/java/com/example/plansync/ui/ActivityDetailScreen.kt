@@ -27,7 +27,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.example.plansync.model.Activity
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.ActivityDetailViewModel
@@ -156,8 +155,8 @@ private fun ActivityPhotoHeader(
             )
     ) {
         if (activity.photoUrl.isNotBlank()) {
-            AsyncImage(
-                model = activity.photoUrl,
+            CachedImage(
+                url = activity.photoUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()

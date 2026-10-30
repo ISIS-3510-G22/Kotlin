@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.plansync.model.Activity
-import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.ActivityTab
@@ -268,8 +267,8 @@ fun ActivityCard(
                 contentAlignment = Alignment.Center
             ) {
                 if (activity.photoUrl.isNotBlank()) {
-                    AsyncImage(
-                        model = activity.photoUrl,
+                    CachedImage(
+                        url = activity.photoUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
