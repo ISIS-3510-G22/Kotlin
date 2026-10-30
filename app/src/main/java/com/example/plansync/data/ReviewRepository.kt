@@ -7,7 +7,12 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import java.util.Date
 import kotlin.coroutines.resume
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 
 class ReviewRepository(
     private val db: FirebaseFirestore = FirebaseProvider.firestore,
@@ -81,21 +86,32 @@ class ReviewRepository(
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }.getOrElse { return Result.failure(it) }
 
-        val ratingsByTag = mutableMapOf<String, MutableList<Int>>()
-        for (planDoc in planDocs) {
+        val goingPlans = planDocs.filter { planDoc ->
             val date = planDoc.getTimestamp("date")?.toDate()
-            if (date == null || !date.before(Date())) continue
-            if (!isGoing(planDoc, uid)) continue
-            val tags = (planDoc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>().filter { it.isNotBlank() }
-            if (tags.isEmpty()) continue
-            val ratings = getRatings(planDoc.id).getOrElse { return Result.failure(it) }
-            if (ratings.isEmpty()) continue
-            for (tag in tags) {
-                ratingsByTag.getOrPut(tag) { mutableListOf() }.addAll(ratings)
-            }
+            date != null && date.before(Date()) && isGoing(planDoc, uid) && tagsOf(planDoc).isNotEmpty()
         }
-        return Result.success(ratingsByTag)
+
+        val ratingsByPlan = coroutineScope {
+            goingPlans.map { planDoc ->
+                async(Dispatchers.IO) { getRatings(planDoc.id) }
+            }.awaitAll()
+        }
+
+        return withContext(Dispatchers.Default) {
+            val ratingsByTag = mutableMapOf<String, MutableList<Int>>()
+            for ((index, planDoc) in goingPlans.withIndex()) {
+                val ratings = ratingsByPlan[index].getOrElse { return@withContext Result.failure(it) }
+                if (ratings.isEmpty()) continue
+                for (tag in tagsOf(planDoc)) {
+                    ratingsByTag.getOrPut(tag) { mutableListOf() }.addAll(ratings)
+                }
+            }
+            Result.success(ratingsByTag)
+        }
     }
+
+    private fun tagsOf(planDoc: DocumentSnapshot): List<String> =
+        (planDoc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>().filter { it.isNotBlank() }
 
     private fun isGoing(planDoc: DocumentSnapshot, uid: String): Boolean =
         (planDoc.get("invitations") as? List<*>).orEmpty()
