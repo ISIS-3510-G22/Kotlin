@@ -63,6 +63,25 @@ class ActivityRepository(
         dao.save(activity.toEntity(uid, position), activity.toLikeEntities(uid), activity.toTagEntities(uid))
     }
 
+    suspend fun removeCachedActivity(activityId: String) {
+        ActivityMemoryCache.remove(activityId)
+        val uid = currentUserId ?: return
+        dao.deleteActivity(uid, activityId)
+    }
+
+    suspend fun deleteActivity(activityId: String, photoUrl: String): Result<Unit> {
+        val result = suspendCancellableCoroutine { continuation ->
+            activities.document(activityId).delete()
+                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
+                .addOnFailureListener { e -> continuation.resume(Result.failure<Unit>(e)) }
+        }
+        if (result.isSuccess) {
+            if (photoUrl.isNotBlank()) StorageRepository().deleteImage(photoUrl)
+            removeCachedActivity(activityId)
+        }
+        return result
+    }
+
     suspend fun getActivities(): Result<List<Activity>> {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))

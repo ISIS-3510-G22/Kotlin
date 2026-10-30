@@ -43,6 +43,9 @@ interface ActivityDao {
     @Query("DELETE FROM activities WHERE cachedFor = :uid")
     suspend fun deleteActivities(uid: String)
 
+    @Query("DELETE FROM activities WHERE cachedFor = :uid AND id = :activityId")
+    suspend fun deleteActivity(uid: String, activityId: String)
+
     @Query("DELETE FROM activity_likes WHERE cachedFor = :uid AND activityId = :activityId")
     suspend fun deleteLikes(uid: String, activityId: String)
 

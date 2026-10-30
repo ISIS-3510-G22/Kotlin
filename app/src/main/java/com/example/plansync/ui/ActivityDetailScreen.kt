@@ -1,5 +1,10 @@
 package com.example.plansync.ui
 
+import android.widget.Toast
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -37,10 +42,43 @@ fun ActivityDetailScreen(
     viewModel: ActivityDetailViewModel = viewModel(),
     onBack: () -> Unit = {},
     onEdit: (String) -> Unit = {},
-    onAddToPlan: (String) -> Unit = {}
+    onAddToPlan: (String) -> Unit = {},
+    onDeleted: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var showPhotoSourceDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.didDelete) {
+        if (uiState.didDelete) {
+            if (uiState.deletedOffline) {
+                Toast.makeText(context, "Deleted on your phone. It will sync when you reconnect.", Toast.LENGTH_LONG).show()
+            }
+            onDeleted()
+        }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete activity?") },
+            text = { Text("This activity will be deleted for everyone. This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    viewModel.deleteActivity()
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     LaunchedEffect(activityId) {
         viewModel.load(activityId)
@@ -100,10 +138,12 @@ fun ActivityDetailScreen(
                         canChangePhoto = uiState.isOnline && !uiState.isPending,
                         isUploadingPhoto = uiState.isUploadingPhoto,
                         isSharing = uiState.isSharing,
+                        isDeleting = uiState.isDeleting,
                         onBack = onBack,
                         onEdit = { onEdit(activity.id) },
                         onChangePhoto = { showPhotoSourceDialog = true },
-                        onShare = viewModel::shareActivity
+                        onShare = viewModel::shareActivity,
+                        onDelete = { showDeleteDialog = true }
                     )
                     ActivityInfo(
                         activity = activity,
@@ -139,10 +179,12 @@ private fun ActivityPhotoHeader(
     canChangePhoto: Boolean,
     isUploadingPhoto: Boolean,
     isSharing: Boolean,
+    isDeleting: Boolean,
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onChangePhoto: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -201,6 +243,13 @@ private fun ActivityPhotoHeader(
                     }
                     HeaderButton(onClick = onEdit) {
                         Icon(Icons.Filled.Edit, contentDescription = "Edit activity", tint = Coral)
+                    }
+                    HeaderButton(onClick = { if (!isDeleting) onDelete() }) {
+                        if (isDeleting) {
+                            CircularProgressIndicator(color = Coral, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                        } else {
+                            Icon(Icons.Filled.Delete, contentDescription = "Delete activity", tint = Coral)
+                        }
                     }
                 }
             }

@@ -15,6 +15,10 @@ object ActivityMemoryCache {
         cache.put(activity.id, activity)
     }
 
+    fun remove(activityId: String) {
+        cache.remove(activityId)
+    }
+
     fun refresh(activities: List<Activity>) {
         val cachedIds = cache.snapshot().keys
         activities.filter { it.id in cachedIds }.forEach(::put)

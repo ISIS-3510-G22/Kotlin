@@ -54,6 +54,10 @@ class PendingActionRepository(
                 .put("type", "set_liked")
                 .put("activityId", activityId)
                 .put("liked", liked)
+            is PendingAction.DeleteActivity -> json
+                .put("type", "delete_activity")
+                .put("activityId", activityId)
+                .put("photoUrl", photoUrl)
             is PendingAction.UpdateProfile -> json
                 .put("type", "update_profile")
                 .put("name", name)
@@ -110,6 +114,11 @@ class PendingActionRepository(
             "set_liked" -> PendingAction.SetLiked(
                 activityId = getString("activityId"),
                 liked = getBoolean("liked"),
+                id = id
+            )
+            "delete_activity" -> PendingAction.DeleteActivity(
+                activityId = getString("activityId"),
+                photoUrl = getString("photoUrl"),
                 id = id
             )
             "update_profile" -> PendingAction.UpdateProfile(

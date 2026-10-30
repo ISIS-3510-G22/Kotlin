@@ -36,6 +36,9 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
         val isLoading: Boolean = false,
         val isUploadingPhoto: Boolean = false,
         val isSharing: Boolean = false,
+        val isDeleting: Boolean = false,
+        val didDelete: Boolean = false,
+        val deletedOffline: Boolean = false,
         val isPending: Boolean = false,
         val isOnline: Boolean = true,
         val errorMessage: String? = null
@@ -116,6 +119,24 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
                     _uiState.update { it.copy(isUploadingPhoto = false, activity = updated) }
                 }
                 .onFailure { error -> _uiState.update { it.copy(isUploadingPhoto = false, errorMessage = error.message) } }
+        }
+    }
+
+    fun deleteActivity() {
+        val current = _uiState.value
+        val activity = current.activity ?: return
+        if (!current.isOwner || current.isDeleting || current.didDelete) return
+        _uiState.update { it.copy(isDeleting = true, errorMessage = null) }
+        viewModelScope.launch {
+            if (!current.isOnline || current.isPending) {
+                OfflineSyncService.deleteActivityOffline(activity)
+                _uiState.update { it.copy(isDeleting = false, didDelete = true, deletedOffline = !current.isOnline) }
+                return@launch
+            }
+            OfflineSyncService.syncNow()
+            repository.deleteActivity(activity.id, activity.photoUrl)
+                .onSuccess { _uiState.update { it.copy(isDeleting = false, didDelete = true) } }
+                .onFailure { error -> _uiState.update { it.copy(isDeleting = false, errorMessage = error.message) } }
         }
     }
 

@@ -273,7 +273,8 @@ fun MainNavHost(
                 activityId = backStackEntry.arguments?.getString("activityId").orEmpty(),
                 onBack = { navController.popBackStack() },
                 onEdit = { id -> navController.navigate(Routes.editActivity(id)) },
-                onAddToPlan = { id -> navController.navigate(Routes.addToPlan(id)) }
+                onAddToPlan = { id -> navController.navigate(Routes.addToPlan(id)) },
+                onDeleted = { navController.popBackStack() }
             )
         }
 
