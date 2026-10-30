@@ -98,7 +98,7 @@ fun ActivityDetailScreen(
                     ActivityPhotoHeader(
                         activity = activity,
                         isOwner = uiState.isOwner,
-                        canChangePhoto = uiState.isOnline,
+                        canChangePhoto = uiState.isOnline && !uiState.isPending,
                         isUploadingPhoto = uiState.isUploadingPhoto,
                         isSharing = uiState.isSharing,
                         onBack = onBack,
@@ -111,6 +111,14 @@ fun ActivityDetailScreen(
                         isLiked = uiState.isLiked,
                         onToggleLike = viewModel::toggleLike
                     )
+                    if (uiState.isPending) {
+                        Text(
+                            text = "This activity is waiting to upload. It will sync when you're back online.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF888888),
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
                     uiState.errorMessage?.let { message ->
                         Text(
                             text = message,

@@ -1,5 +1,6 @@
 package com.example.plansync.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,22 +59,34 @@ fun CreateActivityScreen(
     onSaved: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     LaunchedEffect(activityId) {
         activityId?.let(viewModel::load)
     }
 
     LaunchedEffect(uiState.didSave) {
-        if (uiState.didSave) onSaved()
+        if (uiState.didSave) {
+            if (uiState.savedOffline) {
+                Toast.makeText(context, "Saved on your phone. It will upload when you reconnect.", Toast.LENGTH_LONG).show()
+            }
+            onSaved()
+        }
     }
 
     Scaffold(
         containerColor = Color(0xFFF5F5F5),
         topBar = {
-            CreateActivityTopBar(
-                title = if (activityId == null) "Create Activity" else "Edit Activity",
-                onBack = onBack
-            )
+            Column {
+                CreateActivityTopBar(
+                    title = if (activityId == null) "Create Activity" else "Edit Activity",
+                    onBack = onBack
+                )
+                OfflineBanner(
+                    isOnline = uiState.isOnline,
+                    message = "You're offline. Type the address manually; your activity will upload when you reconnect."
+                )
+            }
         },
         bottomBar = {
             CreateActivityBottomBar(
@@ -104,7 +118,7 @@ fun CreateActivityScreen(
                 FormTextField(
                     value = uiState.address,
                     onValueChange = viewModel::onAddressChange,
-                    placeholder = "Search a place or address",
+                    placeholder = if (uiState.isOnline) "Search a place or address" else "Type the full address",
                     leadingIcon = Icons.Filled.LocationOn
                 )
                 if (uiState.placeSuggestions.isNotEmpty()) {

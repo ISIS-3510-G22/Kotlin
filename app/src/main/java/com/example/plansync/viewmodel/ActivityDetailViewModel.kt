@@ -36,6 +36,7 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
         val isLoading: Boolean = false,
         val isUploadingPhoto: Boolean = false,
         val isSharing: Boolean = false,
+        val isPending: Boolean = false,
         val isOnline: Boolean = true,
         val errorMessage: String? = null
     )
@@ -86,7 +87,7 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
         val uid = repository.currentUserId ?: return
         val liked = !_uiState.value.isLiked
         viewModelScope.launch {
-            if (!_uiState.value.isOnline) {
+            if (!_uiState.value.isOnline || _uiState.value.isPending) {
                 show(OfflineSyncService.setLikedOffline(activity, liked))
                 return@launch
             }
@@ -103,7 +104,7 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
 
     fun onPhotoPicked(uri: Uri) {
         val activity = _uiState.value.activity ?: return
-        if (!_uiState.value.isOnline) return
+        if (!_uiState.value.isOnline || _uiState.value.isPending) return
         viewModelScope.launch {
             _uiState.update { it.copy(isUploadingPhoto = true, errorMessage = null) }
             repository.updatePhoto(activity.id, uri)
@@ -157,13 +158,15 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 
-    private fun show(activity: Activity) {
+    private suspend fun show(activity: Activity) {
         val uid = repository.currentUserId
+        val isPending = activity.id in OfflineSyncService.pendingActivityIds()
         _uiState.update {
             it.copy(
                 activity = activity,
                 isOwner = activity.ownerId == uid,
                 isLiked = uid in activity.likedBy,
+                isPending = isPending,
                 isLoading = false
             )
         }

@@ -28,6 +28,8 @@ class ActivityRepository(
 
     val currentUserId: String? get() = auth.currentUser?.uid
 
+    fun newActivityId(): String = activities.document().id
+
     private fun cacheFile(): String? = auth.currentUser?.uid?.let { "activities_$it.json" }
 
     suspend fun getCachedActivities(): List<Activity> {
@@ -137,7 +139,8 @@ class ActivityRepository(
         notes: String,
         visibility: ActivityVisibility,
         lat: Double?,
-        lng: Double?
+        lng: Double?,
+        isNew: Boolean = activityId == null
     ): Result<Unit> {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
@@ -154,11 +157,11 @@ class ActivityRepository(
             data["lat"] = lat
             data["lng"] = lng
         }
-        if (activityId == null) {
+        if (isNew) {
             data["ownerId"] = uid
             data["likedBy"] = emptyList<String>()
         }
-        val doc = if (activityId == null) activities.document() else activities.document(activityId)
+        val doc = activityId?.let { activities.document(it) } ?: activities.document()
         batch.set(doc, data, SetOptions.merge())
         newCustomTags.forEach { tag ->
             batch.set(

@@ -1,7 +1,9 @@
 package com.example.plansync.data
 
+import com.example.plansync.model.ActivityVisibility
 import com.example.plansync.model.PendingAction
 import com.google.firebase.auth.FirebaseAuth
+import org.json.JSONArray
 import org.json.JSONObject
 
 class PendingActionRepository(
@@ -33,6 +35,21 @@ class PendingActionRepository(
     private fun PendingAction.toJson(): JSONObject {
         val json = JSONObject().put("id", id)
         return when (this) {
+            is PendingAction.SaveActivity -> json
+                .put("type", "save_activity")
+                .put("activityId", activityId)
+                .put("isNew", isNew)
+                .put("name", name)
+                .put("address", address)
+                .put("price", price)
+                .put("tags", JSONArray(tags))
+                .put("newCustomTags", JSONArray(newCustomTags))
+                .put("notes", notes)
+                .put("visibility", visibility.name)
+                .apply {
+                    lat?.let { put("lat", it) }
+                    lng?.let { put("lng", it) }
+                }
             is PendingAction.SetLiked -> json
                 .put("type", "set_liked")
                 .put("activityId", activityId)
@@ -40,9 +57,28 @@ class PendingActionRepository(
         }
     }
 
-    private fun JSONObject.toPendingAction(): PendingAction = PendingAction.SetLiked(
-        activityId = getString("activityId"),
-        liked = getBoolean("liked"),
-        id = getString("id")
-    )
+    private fun JSONObject.toPendingAction(): PendingAction {
+        val id = getString("id")
+        return when (getString("type")) {
+            "save_activity" -> PendingAction.SaveActivity(
+                activityId = getString("activityId"),
+                isNew = getBoolean("isNew"),
+                name = getString("name"),
+                address = getString("address"),
+                price = getInt("price"),
+                tags = getJSONArray("tags").toStringList(),
+                newCustomTags = getJSONArray("newCustomTags").toStringList(),
+                notes = getString("notes"),
+                visibility = ActivityVisibility.valueOf(getString("visibility")),
+                lat = optDoubleOrNull("lat"),
+                lng = optDoubleOrNull("lng"),
+                id = id
+            )
+            else -> PendingAction.SetLiked(
+                activityId = getString("activityId"),
+                liked = getBoolean("liked"),
+                id = id
+            )
+        }
+    }
 }

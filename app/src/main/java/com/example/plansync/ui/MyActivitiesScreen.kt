@@ -127,6 +127,7 @@ fun MyActivitiesScreen(
                             ActivityCard(
                                 activity = activity,
                                 distanceKm = uiState.distancesKm[activity.id],
+                                isPending = activity.id in uiState.pendingIds,
                                 onClick = { onActivitySelected(activity.id) },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
@@ -241,7 +242,8 @@ fun ActivityCard(
     activity: Activity,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    distanceKm: Float? = null
+    distanceKm: Float? = null,
+    isPending: Boolean = false
 ) {
     Card(
         onClick = onClick,
@@ -317,6 +319,15 @@ fun ActivityCard(
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = Coral
+                    )
+                }
+                if (isPending) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Waiting to upload",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF888888)
                     )
                 }
             }
