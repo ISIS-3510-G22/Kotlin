@@ -33,6 +33,7 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
         val selectedTab: ActivityTab = ActivityTab.FOR_YOU,
         val filteredActivities: List<Activity> = emptyList(),
         val distancesKm: Map<String, Float> = emptyMap(),
+        val pendingIds: Set<String> = emptySet(),
         val isOnline: Boolean = true,
         val isLoading: Boolean = false,
         val errorMessage: String? = null
@@ -82,7 +83,9 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
     }
 
     private suspend fun show(activities: List<Activity>) {
-        _uiState.update { it.copy(allActivities = activities) }
+        _uiState.update {
+            it.copy(allActivities = activities, pendingIds = OfflineSyncService.pendingActivityIds())
+        }
         refresh()
     }
 
