@@ -7,6 +7,7 @@ import com.example.plansync.model.Group
 import com.example.plansync.model.PaymentMethod
 import com.example.plansync.model.PaymentMethodType
 import com.example.plansync.model.User
+import android.util.LruCache
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
@@ -114,12 +115,21 @@ class CrewRepository(
     }
 
     suspend fun getUsersByIds(ids: List<String>): Result<List<User>> {
-        val result = mutableListOf<User>()
-        for (chunk in ids.chunked(30)) {
-            val chunkUsers = getUsersChunk(chunk).getOrElse { return Result.failure(it) }
-            result.addAll(chunkUsers)
+        val found = mutableMapOf<String, User>()
+        for (id in ids.distinct()) {
+            val cached = userCache.get(id)
+            if (cached != null) found[id] = cached
         }
-        return Result.success(result)
+
+        val missingIds = ids.distinct().filter { it !in found }
+        for (chunk in missingIds.chunked(30)) {
+            val chunkUsers = getUsersChunk(chunk).getOrElse { return Result.failure(it) }
+            for (user in chunkUsers) {
+                found[user.id] = user
+                userCache.put(user.id, user)
+            }
+        }
+        return Result.success(ids.distinct().mapNotNull { found[it] })
     }
 
     suspend fun getUser(userId: String): Result<User> =
@@ -127,7 +137,9 @@ class CrewRepository(
             users.document(userId).get()
                 .addOnSuccessListener { doc ->
                     if (doc.exists()) {
-                        continuation.resume(Result.success(doc.toUser()))
+                        val user = doc.toUser()
+                        userCache.put(userId, user)
+                        continuation.resume(Result.success(user))
                     } else {
                         continuation.resume(Result.failure(Exception("User not found.")))
                     }
@@ -388,5 +400,9 @@ class CrewRepository(
             detail = this["account"] as? String ?: "",
             type   = if (type.contains("venmo", ignoreCase = true)) PaymentMethodType.VENMO else PaymentMethodType.BANK
         )
+    }
+
+    companion object {
+        private val userCache = LruCache<String, User>(25)
     }
 }
