@@ -67,6 +67,8 @@ fun MyCrewScreen(
         ) {
             MyCrewTopBar()
 
+            OfflineBanner(isOnline = uiState.isOnline && !uiState.showingSavedCrew, message = "You're offline — showing saved crew")
+
             MyCrewTabRow(
                 selectedTab = uiState.selectedTab,
                 onTabSelected = viewModel::selectTab
@@ -100,16 +102,18 @@ fun MyCrewScreen(
 
             if (uiState.selectedTab == CrewTab.GROUPS) {
                 CountErrorLine(message = uiState.groupInvitesCountError)
+                CountErrorLine(message = uiState.savedCrewError)
                 CrewActionButton(label = "Create Group", onClick = onCreateGroup)
                 CrewActionButton(
-                    label = "New Group Invites (${uiState.groupInvitesCount})",
+                    label = "New Group Invites" + (uiState.groupInvitesCount?.let { " ($it)" } ?: ""),
                     onClick = onGroupInvites
                 )
             } else {
                 CountErrorLine(message = uiState.friendRequestsCountError)
+                CountErrorLine(message = uiState.savedCrewError)
                 CrewActionButton(label = "Add Friend", onClick = onAddFriend)
                 CrewActionButton(
-                    label = "New Friend Requests (${uiState.friendRequestsCount})",
+                    label = "New Friend Requests" + (uiState.friendRequestsCount?.let { " ($it)" } ?: ""),
                     onClick = onFriendRequests
                 )
             }
