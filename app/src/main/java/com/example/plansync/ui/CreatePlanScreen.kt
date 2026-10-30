@@ -450,7 +450,7 @@ fun CreatePlanScreen(
                             )
                             Spacer(Modifier.height(2.dp))
                             Text(
-                                "$day is the most popular day to create plans",
+                                "$day is the most popular day to go out for plans",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF555555)
                             )
