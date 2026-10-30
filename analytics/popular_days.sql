@@ -3,7 +3,7 @@
 -- Question: What days of the week do users create plans the most?
 --
 -- Source table: Firebase Analytics export in BigQuery
---   Project:    isis-3510-g22
+--   Project:    plansync-bc8f6
 --   Dataset:    analytics_554602798
 --   Table:      events_* (wildcard over daily partitions)
 --
@@ -23,7 +23,7 @@ SELECT
   FORMAT_TIMESTAMP('%A', TIMESTAMP_MICROS(event_timestamp), 'America/Bogota') AS day_of_week,
   COUNT(*)                                                                      AS plan_count
 FROM
-  `isis-3510-g22.analytics_554602798.events_*`
+  `plansync-bc8f6.analytics_554602798.events_*`
 WHERE
   event_name = 'plan_created'
   AND _TABLE_SUFFIX BETWEEN
