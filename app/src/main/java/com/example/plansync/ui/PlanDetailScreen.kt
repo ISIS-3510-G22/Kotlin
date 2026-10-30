@@ -47,10 +47,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import com.example.plansync.service.NetworkMonitor
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -90,8 +92,9 @@ fun PlanDetailScreen(
     onAddActivity: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val isOnline by NetworkMonitor.get(context).isOnline.collectAsState(initial = true)
 
-    // Load plan once when the screen first enters composition
     LaunchedEffect(planId) {
         viewModel.loadPlan(planId)
     }
@@ -101,8 +104,8 @@ fun PlanDetailScreen(
             .fillMaxSize()
             .background(Color(0xFFF5F5F5))
     ) {
-        // ── Top bar ────────────────────────────────────────────────────────
         PlanDetailTopBar(onBack = onBack)
+        OfflineBanner(isOnline = isOnline, message = "You're offline — showing cached data")
 
         // ── Content: loading / error / data ───────────────────────────────
         when {
@@ -132,6 +135,13 @@ fun PlanDetailScreen(
     }
 
     // ── RSVP dialog ────────────────────────────────────────────────────────
+    if (uiState.pendingSync) {
+        OfflineBanner(
+            isOnline = false,
+            message  = "RSVP saved offline — will sync when reconnected"
+        )
+    }
+
     if (uiState.showRsvpDialog && uiState.plan != null) {
         RsvpDialog(
             planTitle = uiState.plan!!.title,

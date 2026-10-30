@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.AnalyticsRepository
 import com.example.plansync.data.InviteRepository
+import com.example.plansync.service.NetworkMonitor
 import com.example.plansync.service.NotificationFactory
 import com.example.plansync.service.NotificationService
 import com.example.plansync.model.Contact
@@ -34,7 +35,8 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
         val filteredContacts: List<Contact> = emptyList(),
         val searchQuery: String = "",
         val isLoading: Boolean = false,
-        val pendingInviteContact: Contact? = null  // contact awaiting confirmation dialog
+        val pendingInviteContact: Contact? = null,
+        val pendingSync: Boolean = false
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -80,27 +82,41 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
     fun onInviteConfirmed(planId: String) {
         val contact = _uiState.value.pendingInviteContact ?: return
         viewModelScope.launch {
+            val isOnline = NetworkMonitor.get(getApplication()).isCurrentlyOnline()
+
+            // Mark contact as invited in the UI regardless of connectivity.
+            _uiState.update { state ->
+                val updated = state.contacts.map {
+                    if (it.id == contact.id) it.copy(isInvited = true) else it
+                }
+                state.copy(
+                    contacts = updated,
+                    filteredContacts = updated.filter { c ->
+                        c.name.contains(state.searchQuery, ignoreCase = true) ||
+                                c.handle?.contains(state.searchQuery, ignoreCase = true) == true
+                    },
+                    pendingInviteContact = null,
+                    pendingSync = !isOnline
+                )
+            }
+
+            if (!isOnline) return@launch
+
             repository.inviteContact(planId, contact.id)
                 .onSuccess {
                     analyticsRepository.logEvent(AnalyticsRepository.INVITE_SENT, planId, inviteeId = contact.id)
                     NotificationFactory.create(AnalyticsRepository.INVITE_SENT, personName = contact.name)
                         ?.let(notificationService::show)
-                    _uiState.update { state ->
-                        val updated = state.contacts.map {
-                            if (it.id == contact.id) it.copy(isInvited = true) else it
-                        }
-                        state.copy(
-                            contacts = updated,
-                            filteredContacts = updated.filter { c ->
-                                c.name.contains(state.searchQuery, ignoreCase = true) ||
-                                        c.handle?.contains(state.searchQuery, ignoreCase = true) == true
-                            },
-                            pendingInviteContact = null
-                        )
-                    }
+                    _uiState.update { it.copy(pendingSync = false) }
                 }
                 .onFailure {
-                    _uiState.update { it.copy(pendingInviteContact = null) }
+                    // Revert the optimistic update on hard failure.
+                    _uiState.update { state ->
+                        val reverted = state.contacts.map {
+                            if (it.id == contact.id) it.copy(isInvited = false) else it
+                        }
+                        state.copy(contacts = reverted, filteredContacts = reverted)
+                    }
                 }
         }
     }

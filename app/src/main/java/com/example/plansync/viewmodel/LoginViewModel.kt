@@ -1,9 +1,11 @@
 package com.example.plansync.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.AuthRepository
 import com.example.plansync.model.User
+import com.example.plansync.service.NetworkMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,8 +26,11 @@ import kotlinx.coroutines.launch
  * [AuthRepository] directly. This keeps the UI layer thin and testable.
  */
 class LoginViewModel(
+    application: Application,
     private val repository: AuthRepository = AuthRepository()
-) : ViewModel() {
+) : AndroidViewModel(application) {
+
+    private val networkMonitor = NetworkMonitor.get(application)
 
     /**
      * Immutable snapshot of everything the Login screen needs to render itself.
@@ -69,6 +74,11 @@ class LoginViewModel(
         val current = _uiState.value
         if (current.email.isBlank() || current.password.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Please enter your email and password.") }
+            return
+        }
+
+        if (!networkMonitor.isCurrentlyOnline()) {
+            _uiState.update { it.copy(errorMessage = "No internet connection. Please try again when online.") }
             return
         }
 

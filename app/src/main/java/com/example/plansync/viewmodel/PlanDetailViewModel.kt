@@ -5,8 +5,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.AnalyticsRepository
 import com.example.plansync.data.PlanRepository
+import com.example.plansync.model.PendingAction
+import com.example.plansync.service.NetworkMonitor
 import com.example.plansync.service.NotificationFactory
 import com.example.plansync.service.NotificationService
+import com.example.plansync.service.OfflineSyncService
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
 import com.example.plansync.model.RsvpStatus
@@ -28,7 +31,8 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
         val plan: Plan? = null,
         val isLoading: Boolean = false,
         val errorMessage: String? = null,
-        val showRsvpDialog: Boolean = false
+        val showRsvpDialog: Boolean = false,
+        val pendingSync: Boolean = false
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -48,17 +52,24 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
         analyticsRepository.logEvent(AnalyticsRepository.RSVP_CONFIRMED, planId)
         notifyRsvp(AnalyticsRepository.RSVP_CONFIRMED)
         _uiState.update { it.copy(showRsvpDialog = false) }
-        viewModelScope.launch {
-            repository.setRsvp(planId, RsvpStatus.GOING).onSuccess { loadPlan(planId) }
-        }
+        setRsvpWithOfflineFallback(planId, RsvpStatus.GOING)
     }
 
     fun onRsvpDeclined(planId: String) {
         analyticsRepository.logEvent(AnalyticsRepository.RSVP_DECLINED, planId)
         notifyRsvp(AnalyticsRepository.RSVP_DECLINED)
         _uiState.update { it.copy(showRsvpDialog = false) }
+        setRsvpWithOfflineFallback(planId, RsvpStatus.NOT_GOING)
+    }
+
+    private fun setRsvpWithOfflineFallback(planId: String, status: RsvpStatus) {
         viewModelScope.launch {
-            repository.setRsvp(planId, RsvpStatus.NOT_GOING).onSuccess { loadPlan(planId) }
+            if (!NetworkMonitor.get(getApplication()).isCurrentlyOnline()) {
+                OfflineSyncService.enqueue(PendingAction.SetRsvp(planId, status.value))
+                _uiState.update { it.copy(pendingSync = true) }
+                return@launch
+            }
+            repository.setRsvp(planId, status).onSuccess { loadPlan(planId) }
         }
     }
 
