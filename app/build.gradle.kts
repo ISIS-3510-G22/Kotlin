@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.firebase.storage)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.places)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

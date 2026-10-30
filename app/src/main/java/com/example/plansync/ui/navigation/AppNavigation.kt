@@ -56,9 +56,15 @@ object Routes {
     const val MY_PLANS    = "my_plans"
     const val PLAN_DETAIL = "plan_detail/{planId}"
     const val INVITE      = "invite/{planId}"
-    const val CREATE_PLAN = "create_plan?activityId={activityId}"
-    fun createPlan(activityId: String? = null) =
-        if (activityId != null) "create_plan?activityId=$activityId" else "create_plan"
+    const val CREATE_PLAN = "create_plan?activityId={activityId}&origin={origin}&sourceId={sourceId}"
+    fun createPlan(activityId: String? = null, origin: String? = null, sourceId: String? = null): String {
+        val params = listOfNotNull(
+            activityId?.let { "activityId=$it" },
+            origin?.let     { "origin=$it" },
+            sourceId?.let   { "sourceId=$it" }
+        )
+        return if (params.isEmpty()) "create_plan" else "create_plan?${params.joinToString("&")}"
+    }
     const val ACTIVITIES  = "activities"
     const val GROUPS      = "groups"
     const val PROFILE     = "profile"
@@ -230,16 +236,20 @@ fun MainNavHost(
 
         composable(
             route = Routes.CREATE_PLAN,
-            arguments = listOf(navArgument("activityId") {
-                type = NavType.StringType
-                nullable = true
-                defaultValue = null
-            })
+            arguments = listOf(
+                navArgument("activityId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("origin")     { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("sourceId")   { type = NavType.StringType; nullable = true; defaultValue = null }
+            )
         ) { backStackEntry ->
             val activityId = backStackEntry.arguments?.getString("activityId")
+            val origin     = backStackEntry.arguments?.getString("origin")
+            val sourceId   = backStackEntry.arguments?.getString("sourceId")
             CreatePlanScreen(
                 preselectedActivityId = activityId,
-                onBack = { navController.popBackStack() },
+                origin                = origin,
+                sourceId              = sourceId,
+                onBack  = { navController.popBackStack() },
                 onSaved = { navController.popBackStack() }
             )
         }

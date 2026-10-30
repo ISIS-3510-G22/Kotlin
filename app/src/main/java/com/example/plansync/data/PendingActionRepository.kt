@@ -65,6 +65,19 @@ class PendingActionRepository(
             is PendingAction.DeletePaymentMethod -> json
                 .put("type", "delete_payment_method")
                 .put("method", method.toJson())
+            is PendingAction.CreatePlan -> json
+                .put("type", "create_plan")
+                .put("name", name)
+                .put("dateMillis", dateMillis)
+                .put("hour", hour)
+                .put("minute", minute)
+                .put("isPublic", isPublic)
+                .put("activityIds", JSONArray(activityIds))
+                .put("tags", JSONArray(tags))
+                .apply {
+                    origin?.let { put("origin", it) }
+                    sourceId?.let { put("sourceId", it) }
+                }
         }
     }
 
@@ -100,9 +113,21 @@ class PendingActionRepository(
                 method = getJSONObject("method").toPaymentMethod(),
                 id = id
             )
-            else -> PendingAction.DeletePaymentMethod(
+            "delete_payment_method" -> PendingAction.DeletePaymentMethod(
                 method = getJSONObject("method").toPaymentMethod(),
                 id = id
+            )
+            else -> PendingAction.CreatePlan(
+                name        = getString("name"),
+                dateMillis  = getLong("dateMillis"),
+                hour        = getInt("hour"),
+                minute      = getInt("minute"),
+                isPublic    = getBoolean("isPublic"),
+                activityIds = getJSONArray("activityIds").toStringList(),
+                tags        = getJSONArray("tags").toStringList(),
+                origin      = optString("origin").takeIf { it.isNotBlank() },
+                sourceId    = optString("sourceId").takeIf { it.isNotBlank() },
+                id          = id
             )
         }
     }
