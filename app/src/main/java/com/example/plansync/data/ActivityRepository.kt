@@ -18,7 +18,7 @@ import kotlinx.coroutines.tasks.await
 class ActivityRepository(
     private val db: FirebaseFirestore = FirebaseProvider.firestore,
     private val auth: FirebaseAuth = FirebaseProvider.auth,
-    private val storage: LocalStorageProvider = LocalStorageProvider
+    private val dao: ActivityDao = ActivityDatabase.dao
 ) {
 
     private val activities = db.collection("activities")
@@ -30,30 +30,37 @@ class ActivityRepository(
 
     fun newActivityId(): String = activities.document().id
 
-    private fun cacheFile(): String? = auth.currentUser?.uid?.let { "activities_$it.json" }
-
     suspend fun getCachedActivities(): List<Activity> {
-        val file = cacheFile() ?: return emptyList()
-        return storage.read(file).toJsonList { it.toActivity() }
+        val uid = currentUserId ?: return emptyList()
+        val likes = dao.getLikes(uid).groupBy { it.activityId }
+        val tags = dao.getTags(uid).groupBy { it.activityId }
+        return dao.getActivities(uid).map { it.toActivity(likes[it.id].orEmpty(), tags[it.id].orEmpty()) }
     }
 
-    suspend fun getCachedActivity(activityId: String): Activity? =
-        ActivityMemoryCache.get(activityId)
-            ?: getCachedActivities().find { it.id == activityId }?.also { ActivityMemoryCache.put(it) }
+    suspend fun getCachedActivity(activityId: String): Activity? {
+        ActivityMemoryCache.get(activityId)?.let { return it }
+        val uid = currentUserId ?: return null
+        val entity = dao.getActivity(uid, activityId) ?: return null
+        return entity.toActivity(dao.getLikes(uid, activityId), dao.getTags(uid, activityId))
+            .also { ActivityMemoryCache.put(it) }
+    }
 
     suspend fun cacheActivities(list: List<Activity>) {
         ActivityMemoryCache.refresh(list)
-        val file = cacheFile() ?: return
-        storage.write(file, list.toJsonString { it.toJson() })
+        val uid = currentUserId ?: return
+        dao.replaceAll(
+            uid = uid,
+            activities = list.mapIndexed { i, activity -> activity.toEntity(uid, i) },
+            likes = list.flatMap { it.toLikeEntities(uid) },
+            tags = list.flatMap { it.toTagEntities(uid) }
+        )
     }
 
     suspend fun cacheActivity(activity: Activity) {
         ActivityMemoryCache.put(activity)
-        val file = cacheFile() ?: return
-        storage.update(file) { json ->
-            val others = json.toJsonList { it.toActivity() }.filter { it.id != activity.id }
-            (listOf(activity) + others).toJsonString { it.toJson() }
-        }
+        val uid = currentUserId ?: return
+        val position = (dao.firstPosition(uid) ?: 0) - 1
+        dao.save(activity.toEntity(uid, position), activity.toLikeEntities(uid), activity.toTagEntities(uid))
     }
 
     suspend fun getActivities(): Result<List<Activity>> {

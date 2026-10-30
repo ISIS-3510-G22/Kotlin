@@ -23,6 +23,7 @@ import com.example.plansync.ui.SignUpScreen
 import com.example.plansync.ui.navigation.MainNavHost
 import com.example.plansync.ui.theme.PlanSyncTheme
 import com.example.plansync.data.FirebaseProvider
+import com.example.plansync.data.ActivityDatabase
 import com.example.plansync.data.LocalStorageProvider
 import com.example.plansync.service.OfflineSyncService
 import com.google.firebase.firestore.FirebaseFirestoreSettings
@@ -55,6 +56,7 @@ class MainActivity : ComponentActivity() {
             .build()
 
         LocalStorageProvider.init(this)
+        ActivityDatabase.init(this)
         OfflineSyncService.start(this, lifecycleScope)
 
         enableEdgeToEdge()
