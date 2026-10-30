@@ -1,5 +1,6 @@
 package com.example.plansync.ui
 
+import android.text.format.DateUtils
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -88,7 +89,7 @@ fun MyActivitiesScreen(
 
             OfflineBanner(
                 isOnline = uiState.isOnline,
-                message = "You're offline. Showing activities saved on your phone, new ones will upload when you reconnect."
+                message = offlineMessage(uiState.lastUpdated)
             )
 
             MyActivitiesTabRow(
@@ -380,4 +381,15 @@ private fun MyActivitiesBottomBar(
             )
         }
     }
+}
+
+private fun offlineMessage(lastUpdated: Long?): String {
+    val now = System.currentTimeMillis()
+    val saved = when {
+        lastUpdated == null -> "saved on your phone"
+        now - lastUpdated < DateUtils.MINUTE_IN_MILLIS -> "saved on your phone just now"
+        else -> "saved on your phone " +
+            DateUtils.getRelativeTimeSpanString(lastUpdated, now, DateUtils.MINUTE_IN_MILLIS).toString().lowercase()
+    }
+    return "You're offline. Showing activities $saved, new ones will upload when you reconnect."
 }

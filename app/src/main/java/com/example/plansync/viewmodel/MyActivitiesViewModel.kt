@@ -4,6 +4,7 @@ import android.app.Application
 import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.plansync.data.ActivityPreferences
 import com.example.plansync.data.ActivityRepository
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityVisibility
@@ -26,6 +27,7 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
     private val repository = ActivityRepository()
     private val locationService = LocationService(application)
     private val networkMonitor = NetworkMonitor.get(application)
+    private val preferences = ActivityPreferences(application)
     private var userLocation: Location? = null
 
     data class UiState(
@@ -34,6 +36,7 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
         val filteredActivities: List<Activity> = emptyList(),
         val distancesKm: Map<String, Float> = emptyMap(),
         val pendingIds: Set<String> = emptySet(),
+        val lastUpdated: Long? = null,
         val isOnline: Boolean = true,
         val isLoading: Boolean = false,
         val errorMessage: String? = null
@@ -55,7 +58,8 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
     fun loadActivities() {
         viewModelScope.launch {
             val cached = repository.getCachedActivities()
-            _uiState.update { it.copy(isLoading = cached.isEmpty(), errorMessage = null) }
+            val lastUpdated = repository.currentUserId?.let { preferences.getLastUpdated(it) }
+            _uiState.update { it.copy(isLoading = cached.isEmpty(), lastUpdated = lastUpdated, errorMessage = null) }
             if (cached.isNotEmpty()) show(cached)
 
             val isOnline = _uiState.value.isOnline
@@ -79,7 +83,17 @@ class MyActivitiesViewModel(application: Application) : AndroidViewModel(applica
         OfflineSyncService.syncNow()
         return repository.getActivities()
             .map { OfflineSyncService.applyPending(it) }
-            .onSuccess { repository.cacheActivities(it) }
+            .onSuccess {
+                repository.cacheActivities(it)
+                saveLastUpdated()
+            }
+    }
+
+    private suspend fun saveLastUpdated() {
+        val uid = repository.currentUserId ?: return
+        val now = System.currentTimeMillis()
+        preferences.setLastUpdated(uid, now)
+        _uiState.update { it.copy(lastUpdated = now) }
     }
 
     private suspend fun show(activities: List<Activity>) {
