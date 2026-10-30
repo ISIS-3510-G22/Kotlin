@@ -73,6 +73,7 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             OfflineSyncService.syncErrors.collect { msg ->
                 _uiState.update { it.copy(errorMessage = msg) }
+                currentPlanId?.let { id -> loadContacts(id) }
             }
         }
     }
@@ -107,6 +108,8 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
     fun onInviteTapped(contact: Contact) {
         _uiState.update { it.copy(pendingInviteContact = contact) }
     }
+
+    fun onErrorShown() { _uiState.update { it.copy(errorMessage = null) } }
 
     /** Clears the pending contact, dismissing the confirmation dialog. */
     fun onDialogDismissed() {

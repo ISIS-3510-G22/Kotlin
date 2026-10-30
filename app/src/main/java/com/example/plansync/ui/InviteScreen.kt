@@ -35,10 +35,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
@@ -74,15 +78,27 @@ fun InviteScreen(
     onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(planId) {
         viewModel.loadContacts(planId)
     }
 
+    LaunchedEffect(uiState.errorMessage) {
+        if (uiState.errorMessage != null) {
+            snackbarHostState.showSnackbar(uiState.errorMessage!!)
+            viewModel.onErrorShown()
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = Color(0xFFF5F5F5)
+    ) { innerPadding ->
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F5F5))
+            .padding(innerPadding)
     ) {
 
         // ── Top bar ────────────────────────────────────────────────────────
@@ -118,9 +134,6 @@ fun InviteScreen(
         OfflineBanner(isOnline = uiState.isOnline, message = "You're offline — invites will sync when reconnected")
         if (uiState.pendingSync) {
             OfflineBanner(isOnline = false, message = "Invite queued — will be sent when back online")
-        }
-        uiState.errorMessage?.let { msg ->
-            OfflineBanner(isOnline = false, message = msg)
         }
 
         HorizontalDivider(color = Color(0xFFEEEEEE))
@@ -194,6 +207,7 @@ fun InviteScreen(
             }
         }
     }
+    } // Scaffold
 
     // ── Invite confirmation dialog ─────────────────────────────────────────
     uiState.pendingInviteContact?.let { contact ->
