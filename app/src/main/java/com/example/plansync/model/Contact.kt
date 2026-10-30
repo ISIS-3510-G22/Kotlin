@@ -19,7 +19,8 @@ data class Contact(
     val name: String,
     val handle: String?,
     val isGroup: Boolean,
-    val isInvited: Boolean = false
+    val isInvited: Boolean = false,
+    val photoUrl: String = ""
 ) {
     /** Initials shown inside the avatar — first two letters of each word. */
     val initials: String

@@ -49,6 +49,12 @@ sealed class PendingAction {
         override val id: String = UUID.randomUUID().toString()
     ) : PendingAction()
 
+    data class SendInvite(
+        val planId: String,
+        val contactId: String,
+        override val id: String = UUID.randomUUID().toString()
+    ) : PendingAction()
+
     data class CreatePlan(
         val name: String,
         val dateMillis: Long,

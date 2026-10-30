@@ -71,6 +71,22 @@ internal fun JSONObject.toPaymentMethod(): PaymentMethod = PaymentMethod(
     isPrimary = getBoolean("isPrimary")
 )
 
+internal fun com.example.plansync.model.Contact.toJson(): JSONObject = JSONObject()
+    .put("id", id)
+    .put("name", name)
+    .put("handle", handle ?: "")
+    .put("isGroup", isGroup)
+    .put("photoUrl", photoUrl)
+
+internal fun JSONObject.toContact(): com.example.plansync.model.Contact =
+    com.example.plansync.model.Contact(
+        id = getString("id"),
+        name = getString("name"),
+        handle = getString("handle").ifBlank { null },
+        isGroup = getBoolean("isGroup"),
+        photoUrl = optString("photoUrl")
+    )
+
 internal fun User.toJson(): JSONObject = JSONObject()
     .put("id", id)
     .put("name", name)

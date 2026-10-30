@@ -5,9 +5,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.AnalyticsRepository
 import com.example.plansync.data.InviteRepository
+import com.example.plansync.model.PendingAction
 import com.example.plansync.service.NetworkMonitor
 import com.example.plansync.service.NotificationFactory
 import com.example.plansync.service.NotificationService
+import com.example.plansync.service.OfflineSyncService
 import com.example.plansync.model.Contact
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -100,7 +102,11 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
 
-            if (!isOnline) return@launch
+            if (!isOnline) {
+                // Queue for sync when back online instead of silently dropping
+                OfflineSyncService.enqueue(PendingAction.SendInvite(planId, contact.id))
+                return@launch
+            }
 
             repository.inviteContact(planId, contact.id)
                 .onSuccess {

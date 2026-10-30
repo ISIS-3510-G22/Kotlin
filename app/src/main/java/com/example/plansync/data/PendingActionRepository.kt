@@ -69,6 +69,10 @@ class PendingActionRepository(
                 .put("type", "set_rsvp")
                 .put("planId", planId)
                 .put("rsvp", rsvp)
+            is PendingAction.SendInvite -> json
+                .put("type", "send_invite")
+                .put("planId", planId)
+                .put("contactId", contactId)
             is PendingAction.CreatePlan -> json
                 .put("type", "create_plan")
                 .put("name", name)
@@ -121,6 +125,11 @@ class PendingActionRepository(
                 planId = getString("planId"),
                 rsvp   = getString("rsvp"),
                 id     = id
+            )
+            "send_invite" -> PendingAction.SendInvite(
+                planId    = getString("planId"),
+                contactId = getString("contactId"),
+                id        = id
             )
             "delete_payment_method" -> PendingAction.DeletePaymentMethod(
                 method = getJSONObject("method").toPaymentMethod(),
