@@ -1,6 +1,7 @@
 package com.example.plansync.data
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.Invitation
@@ -23,11 +24,14 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 class PlanRepository(
     private val db: FirebaseFirestore = FirebaseProvider.firestore,
-    private val auth: FirebaseAuth = FirebaseProvider.auth
+    private val auth: FirebaseAuth = FirebaseProvider.auth,
+    private val planDao: PlanDao? = null
 ) {
 
 
@@ -70,13 +74,18 @@ class PlanRepository(
     }
 
     suspend fun getPlan(planId: String): Result<Plan> {
-        val planDoc = suspendCancellableCoroutine<DocumentSnapshot?> { cont ->
-            db.collection("plans").document(planId).get()
-                .addOnSuccessListener { cont.resume(it) }
-                .addOnFailureListener { cont.resume(null) }
-        } ?: return Result.failure(Exception("Plan not found."))
+        // IO: force server fetch, skip Firestore's local cache; 8s timeout then fall back to Room
+        val planDoc: DocumentSnapshot? = try {
+            withTimeout(8_000) {
+                withContext(Dispatchers.IO) {
+                    db.collection("plans").document(planId).get(Source.SERVER).await()
+                }
+            }
+        } catch (_: Exception) { null }
 
-        if (!planDoc.exists()) return Result.failure(Exception("Plan not found."))
+        if (planDoc == null || !planDoc.exists()) {
+            return roomFallback(planId)
+        }
 
         val activityIds = (planDoc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>()
         // Fetch all activities in parallel instead of one-by-one.
@@ -100,22 +109,42 @@ class PlanRepository(
             val total = activities.sumOf { it.price.toDouble() }
             if (goingIds.isNotEmpty() && total > 0) (total / goingIds.size).toInt() else 0
         }
-        return Result.success(
-            Plan(
-                id = planDoc.id,
-                title = planDoc.getString("name").orEmpty(),
-                date = planDate
-                    ?.let { SimpleDateFormat("MMM d, yyyy", Locale.US).format(it) }
-                    .orEmpty(),
-                estimatedCostPerPerson = costPerPerson,
-                participants = participants,
-                activities = activities,
-                status = status,
-                activityIds = activityIds,
-                category = planTags.firstOrNull().orEmpty(),
-                invitations = invitations
-            )
+        val plan = Plan(
+            id = planDoc.id,
+            title = planDoc.getString("name").orEmpty(),
+            date = planDate
+                ?.let { SimpleDateFormat("MMM d, yyyy", Locale.US).format(it) }
+                .orEmpty(),
+            estimatedCostPerPerson = costPerPerson,
+            participants = participants,
+            activities = activities,
+            status = status,
+            activityIds = activityIds,
+            category = planTags.firstOrNull().orEmpty(),
+            invitations = invitations
         )
+
+        // IO: write to Room so offline opens can serve cached data
+        planDao?.let { dao ->
+            withContext(Dispatchers.IO) {
+                dao.upsertPlan(plan.toEntity())
+                dao.deleteActivities(planDoc.id)
+                dao.upsertActivities(activities.map { it.toEntity(planDoc.id) })
+                dao.deleteParticipants(planDoc.id)
+                dao.upsertParticipants(participants.map { it.toEntity(planDoc.id) })
+            }
+        }
+
+        return Result.success(plan)
+    }
+
+    private suspend fun roomFallback(planId: String): Result<Plan> {
+        val dao = planDao ?: return Result.failure(Exception("connect_to_load"))
+        val entity = withContext(Dispatchers.IO) { dao.getPlan(planId) }
+            ?: return Result.failure(Exception("connect_to_load"))
+        val activities = withContext(Dispatchers.IO) { dao.getActivities(planId) }.map { it.toActivity() }
+        val participants = withContext(Dispatchers.IO) { dao.getParticipants(planId) }.map { it.toParticipant() }
+        return Result.success(entity.toPlan(activities, participants))
     }
 
     private suspend fun fetchActivity(activityId: String): Activity? =
