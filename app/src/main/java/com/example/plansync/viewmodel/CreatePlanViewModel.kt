@@ -97,7 +97,12 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             activityRepository.getActivities()
                 .onSuccess { activities ->
+                    activityRepository.cacheActivities(activities)
                     _uiState.update { it.copy(availableActivities = activities) }
+                }
+                .onFailure {
+                    val cached = activityRepository.getCachedActivities()
+                    _uiState.update { it.copy(availableActivities = cached) }
                 }
         }
     }
@@ -302,6 +307,8 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
 
         val tags = state.selectedActivities.flatMap { it.tags }.filter { it.isNotBlank() }.distinct()
 
+        val planId = UUID.randomUUID().toString()
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
@@ -310,6 +317,7 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
                 // Queue the write; it will be uploaded by OfflineSyncService when back online.
                 OfflineSyncService.createPlanOffline(
                     PendingAction.CreatePlan(
+                        planId      = planId,
                         name        = state.planName,
                         dateMillis  = state.selectedDateMillis,
                         hour        = state.selectedHour,
@@ -327,6 +335,7 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
             }
 
             planRepository.createPlan(
+                planId      = planId,
                 name        = state.planName,
                 date        = Timestamp(planDateTime(state.selectedDateMillis, state.selectedHour, state.selectedMinute)),
                 isPublic    = state.isPublic,
@@ -334,7 +343,7 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
                 tags        = tags,
                 origin      = state.origin,
                 sourceId    = state.sourceId
-            ).onSuccess { planId ->
+            ).onSuccess {
                 analyticsRepository.logEvent(
                     type          = AnalyticsRepository.PLAN_CREATED,
                     planId        = planId,

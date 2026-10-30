@@ -164,6 +164,7 @@ object OfflineSyncService {
                 set(java.util.Calendar.MILLISECOND, 0)
             }
             planRepository.createPlan(
+                planId      = action.planId,
                 name        = action.name,
                 date        = com.google.firebase.Timestamp(cal.time),
                 isPublic    = action.isPublic,

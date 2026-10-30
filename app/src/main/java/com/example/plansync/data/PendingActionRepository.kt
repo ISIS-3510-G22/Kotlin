@@ -75,6 +75,7 @@ class PendingActionRepository(
                 .put("contactId", contactId)
             is PendingAction.CreatePlan -> json
                 .put("type", "create_plan")
+                .put("planId", planId)
                 .put("name", name)
                 .put("dateMillis", dateMillis)
                 .put("hour", hour)
@@ -136,6 +137,7 @@ class PendingActionRepository(
                 id = id
             )
             else -> PendingAction.CreatePlan(
+                planId      = optString("planId").takeIf { it.isNotBlank() } ?: id,
                 name        = getString("name"),
                 dateMillis  = getLong("dateMillis"),
                 hour        = getInt("hour"),

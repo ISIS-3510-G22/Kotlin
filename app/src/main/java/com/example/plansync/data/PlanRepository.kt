@@ -11,6 +11,7 @@ import com.example.plansync.model.PlanStatus
 import com.example.plansync.model.RsvpStatus
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import java.util.UUID
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
@@ -41,6 +42,7 @@ class PlanRepository(
      * participantsIds, activityIds, tags, invitations.
      */
     suspend fun createPlan(
+        planId: String = UUID.randomUUID().toString(),
         name: String,
         date: Timestamp,
         isPublic: Boolean,
@@ -63,13 +65,12 @@ class PlanRepository(
                 "tags"             to tags,
                 "invitations"      to listOf(mapOf("userId" to uid, "rsvp" to "going"))
             ).apply {
-                // Optional fields read by Valentina's Type 3 BQ — Flutter ignores unknown fields.
                 origin?.let   { put("origin", it) }
                 sourceId?.let { put("sourceId", it) }
             }
-            db.collection("plans").add(data)
-                .addOnSuccessListener { ref -> continuation.resume(Result.success(ref.id)) }
-                .addOnFailureListener { e  -> continuation.resume(Result.failure(e)) }
+            db.collection("plans").document(planId).set(data)
+                .addOnSuccessListener { continuation.resume(Result.success(planId)) }
+                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
     }
 
