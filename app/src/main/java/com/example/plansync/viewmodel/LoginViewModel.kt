@@ -9,6 +9,8 @@ import com.example.plansync.service.NetworkMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -41,14 +43,19 @@ class LoginViewModel(
         val password: String = "",
         val isLoading: Boolean = false,
         val errorMessage: String? = null,
-        val loggedInUser: User? = null
+        val loggedInUser: User? = null,
+        val isOffline: Boolean = false
     )
 
-    // Mutable backing field — private so only this ViewModel can write to it
     private val _uiState = MutableStateFlow(UiState())
-
-    // Read-only StateFlow exposed to the UI layer
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    init {
+        // Reactively track connectivity so the button enables/disables without a tap
+        networkMonitor.isOnline
+            .onEach { online -> _uiState.update { it.copy(isOffline = !online) } }
+            .launchIn(viewModelScope)
+    }
 
     /** Called by the UI whenever the email field changes. */
     fun onEmailChange(value: String) {
