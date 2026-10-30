@@ -1,5 +1,6 @@
 package com.example.plansync.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,41 +46,53 @@ fun AddPaymentMethodScreen(
     onSaved: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     LaunchedEffect(uiState.didSave) {
-        if (uiState.didSave) onSaved()
+        if (uiState.didSave) {
+            if (uiState.savedOffline) {
+                Toast.makeText(context, "Saved on your phone. It will sync when you reconnect.", Toast.LENGTH_LONG).show()
+            }
+            onSaved()
+        }
     }
 
     Scaffold(
         topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    onClick = onBack,
-                    shape = CircleShape,
-                    color = CoralLight,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Coral
-                        )
-                    }
-                }
-                Text(
-                    text = "Add Reimbursement Method",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
+            Column {
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 40.dp),
-                    textAlign = TextAlign.Center
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        onClick = onBack,
+                        shape = CircleShape,
+                        color = CoralLight,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Coral
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Add Reimbursement Method",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 40.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                OfflineBanner(
+                    isOnline = uiState.isOnline,
+                    message = "You're offline. Your new account will be saved on your phone and synced when you reconnect."
                 )
             }
         },
@@ -98,11 +113,12 @@ fun AddPaymentMethodScreen(
                 }
                 Surface(
                     onClick = viewModel::saveAccount,
+                    enabled = !uiState.isSaving,
                     shape = RoundedCornerShape(50),
-                    color = Coral
+                    color = if (uiState.isSaving) Color.Gray else Coral
                 ) {
                     Text(
-                        text = "Save Account",
+                        text = if (uiState.isSaving) "Saving..." else "Save Account",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimary,

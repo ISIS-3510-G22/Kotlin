@@ -43,6 +43,26 @@ fun ProfileScreen(
         if (uiState.isLoggedOut) onLoggedOut()
     }
 
+    if (uiState.showUnsyncedWarning) {
+        AlertDialog(
+            onDismissRequest = viewModel::onUnsyncedWarningDismissed,
+            title = { Text("You have unsynced changes") },
+            text = {
+                Text("Some changes haven't been uploaded yet. They'll sync the next time you log in on this phone with internet. Log out anyway?")
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::logOut) {
+                    Text("Log out", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::onUnsyncedWarningDismissed) {
+                    Text("Stay")
+                }
+            }
+        )
+    }
+
     Scaffold(
         bottomBar = {
             ProfileBottomBar(
@@ -69,6 +89,11 @@ fun ProfileScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp)
+            )
+
+            OfflineBanner(
+                isOnline = uiState.isOnline,
+                message = "You're offline. Showing the profile saved on your phone, your edits will sync when you reconnect."
             )
 
             Column(
@@ -124,7 +149,7 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(32.dp))
 
                 Surface(
-                    onClick = viewModel::logOut,
+                    onClick = viewModel::onLogOutClick,
                     shape = RoundedCornerShape(50),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.fillMaxWidth()

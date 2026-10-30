@@ -25,4 +25,21 @@ sealed class PendingAction {
         val liked: Boolean,
         override val id: String = UUID.randomUUID().toString()
     ) : PendingAction()
+
+    data class UpdateProfile(
+        val name: String,
+        val lastName: String,
+        val phone: String,
+        override val id: String = UUID.randomUUID().toString()
+    ) : PendingAction()
+
+    data class AddPaymentMethod(
+        val method: PaymentMethod,
+        override val id: String = UUID.randomUUID().toString()
+    ) : PendingAction()
+
+    data class DeletePaymentMethod(
+        val method: PaymentMethod,
+        override val id: String = UUID.randomUUID().toString()
+    ) : PendingAction()
 }

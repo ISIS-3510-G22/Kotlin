@@ -54,6 +54,17 @@ class PendingActionRepository(
                 .put("type", "set_liked")
                 .put("activityId", activityId)
                 .put("liked", liked)
+            is PendingAction.UpdateProfile -> json
+                .put("type", "update_profile")
+                .put("name", name)
+                .put("lastName", lastName)
+                .put("phone", phone)
+            is PendingAction.AddPaymentMethod -> json
+                .put("type", "add_payment_method")
+                .put("method", method.toJson())
+            is PendingAction.DeletePaymentMethod -> json
+                .put("type", "delete_payment_method")
+                .put("method", method.toJson())
         }
     }
 
@@ -74,9 +85,23 @@ class PendingActionRepository(
                 lng = optDoubleOrNull("lng"),
                 id = id
             )
-            else -> PendingAction.SetLiked(
+            "set_liked" -> PendingAction.SetLiked(
                 activityId = getString("activityId"),
                 liked = getBoolean("liked"),
+                id = id
+            )
+            "update_profile" -> PendingAction.UpdateProfile(
+                name = getString("name"),
+                lastName = getString("lastName"),
+                phone = getString("phone"),
+                id = id
+            )
+            "add_payment_method" -> PendingAction.AddPaymentMethod(
+                method = getJSONObject("method").toPaymentMethod(),
+                id = id
+            )
+            else -> PendingAction.DeletePaymentMethod(
+                method = getJSONObject("method").toPaymentMethod(),
                 id = id
             )
         }

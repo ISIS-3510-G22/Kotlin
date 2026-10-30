@@ -3,9 +3,12 @@ package com.example.plansync.service
 import android.content.Context
 import com.example.plansync.data.ActivityRepository
 import com.example.plansync.data.PendingActionRepository
+import com.example.plansync.data.ProfileRepository
+import com.example.plansync.data.WriteResult
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.PendingAction
+import com.example.plansync.model.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -16,6 +19,7 @@ object OfflineSyncService {
 
     private val pendingActions = PendingActionRepository()
     private val activityRepository = ActivityRepository()
+    private val profileRepository = ProfileRepository()
     private lateinit var locationService: LocationService
     private val mutex = Mutex()
 
@@ -56,6 +60,10 @@ object OfflineSyncService {
         return updated
     }
 
+    suspend fun enqueue(action: PendingAction) = pendingActions.add(action)
+
+    suspend fun hasPendingActions(): Boolean = pendingActions.getAll().isNotEmpty()
+
     suspend fun pendingActivityIds(): Set<String> =
         pendingActions.getAll().filterIsInstance<PendingAction.SaveActivity>().map { it.activityId }.toSet()
 
@@ -69,9 +77,26 @@ object OfflineSyncService {
             when (action) {
                 is PendingAction.SaveActivity -> cached[action.activityId]?.let { result[it.id] = it }
                 is PendingAction.SetLiked -> result[action.activityId]?.let { result[it.id] = it.withLike(action.liked) }
+                else -> Unit
             }
         }
         return result.values.toList()
+    }
+
+    suspend fun applyPending(user: User): User = pendingActions.getAll().fold(user) { current, action ->
+        when (action) {
+            is PendingAction.UpdateProfile -> current.copy(name = action.name, lastName = action.lastName, phone = action.phone)
+            is PendingAction.AddPaymentMethod -> current.copy(
+                reimbursementMethods = (current.reimbursementMethods + action.method)
+                    .mapIndexed { i, m -> m.copy(isPrimary = i == 0) }
+            )
+            is PendingAction.DeletePaymentMethod -> current.copy(
+                reimbursementMethods = current.reimbursementMethods
+                    .filter { it.id != action.method.id }
+                    .mapIndexed { i, m -> m.copy(isPrimary = i == 0) }
+            )
+            else -> current
+        }
     }
 
     suspend fun syncNow() = mutex.withLock {
@@ -99,6 +124,12 @@ object OfflineSyncService {
             ).isSuccess
         }
         is PendingAction.SetLiked -> activityRepository.setLiked(action.activityId, action.liked).isSuccess
+        is PendingAction.UpdateProfile ->
+            profileRepository.updateProfile(action.name, action.lastName, action.phone) == WriteResult.Committed
+        is PendingAction.AddPaymentMethod ->
+            profileRepository.addPaymentMethod(action.method) == WriteResult.Committed
+        is PendingAction.DeletePaymentMethod ->
+            profileRepository.deletePaymentMethod(action.method) == WriteResult.Committed
     }
 
     private fun Activity.withLike(liked: Boolean): Activity {
