@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.example.plansync.ui.LoginScreen
 import com.example.plansync.ui.SignUpScreen
@@ -23,6 +24,7 @@ import com.example.plansync.ui.navigation.MainNavHost
 import com.example.plansync.ui.theme.PlanSyncTheme
 import com.example.plansync.data.FirebaseProvider
 import com.example.plansync.data.LocalStorageProvider
+import com.example.plansync.service.OfflineSyncService
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.PersistentCacheSettings
 
@@ -53,6 +55,7 @@ class MainActivity : ComponentActivity() {
             .build()
 
         LocalStorageProvider.init(this)
+        OfflineSyncService.start(this, lifecycleScope)
 
         enableEdgeToEdge()
         setContent {

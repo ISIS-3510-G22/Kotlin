@@ -91,9 +91,14 @@ fun ActivityDetailScreen(
                         .padding(innerPadding)
                         .verticalScroll(rememberScrollState())
                 ) {
+                    OfflineBanner(
+                        isOnline = uiState.isOnline,
+                        message = "You're offline. Likes will sync when you reconnect, changing the photo needs a connection."
+                    )
                     ActivityPhotoHeader(
                         activity = activity,
                         isOwner = uiState.isOwner,
+                        canChangePhoto = uiState.isOnline,
                         isUploadingPhoto = uiState.isUploadingPhoto,
                         isSharing = uiState.isSharing,
                         onBack = onBack,
@@ -124,6 +129,7 @@ fun ActivityDetailScreen(
 private fun ActivityPhotoHeader(
     activity: Activity,
     isOwner: Boolean,
+    canChangePhoto: Boolean,
     isUploadingPhoto: Boolean,
     isSharing: Boolean,
     onBack: () -> Unit,
@@ -181,8 +187,10 @@ private fun ActivityPhotoHeader(
                     }
                 }
                 if (isOwner) {
-                    HeaderButton(onClick = onChangePhoto) {
-                        Icon(Icons.Filled.PhotoCamera, contentDescription = "Change photo", tint = Coral)
+                    if (canChangePhoto) {
+                        HeaderButton(onClick = onChangePhoto) {
+                            Icon(Icons.Filled.PhotoCamera, contentDescription = "Change photo", tint = Coral)
+                        }
                     }
                     HeaderButton(onClick = onEdit) {
                         Icon(Icons.Filled.Edit, contentDescription = "Edit activity", tint = Coral)
