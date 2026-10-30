@@ -14,6 +14,8 @@ import com.example.plansync.model.Contact
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -31,6 +33,9 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
     private val repository = InviteRepository()
     private val analyticsRepository = AnalyticsRepository()
     private val notificationService = NotificationService(application)
+    private val networkMonitor = NetworkMonitor.get(application)
+
+    private var currentPlanId: String? = null
 
     data class UiState(
         val contacts: List<Contact> = emptyList(),
@@ -38,19 +43,34 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
         val searchQuery: String = "",
         val isLoading: Boolean = false,
         val pendingInviteContact: Contact? = null,
-        val pendingSync: Boolean = false
+        val pendingSync: Boolean = false,
+        // True when offline and no cached contacts exist yet — prevents silent empty list
+        val neverCached: Boolean = false
     )
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    init {
+        // Reload contacts on reconnect so the list is never stale after coming back online
+        viewModelScope.launch {
+            networkMonitor.isOnline
+                .distinctUntilChanged()
+                .filter { it }
+                .collect { currentPlanId?.let { id -> loadContacts(id) } }
+        }
+    }
+
     /** Load suggested contacts for [planId], marking those already invited. */
     fun loadContacts(planId: String) {
+        currentPlanId = planId
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val contacts = repository.getSuggestedContacts(planId)
+            // neverCached = true when the result is empty because we're offline with no file cache
+            val neverCached = contacts.isEmpty() && !networkMonitor.isCurrentlyOnline()
             _uiState.update {
-                it.copy(isLoading = false, contacts = contacts, filteredContacts = contacts)
+                it.copy(isLoading = false, contacts = contacts, filteredContacts = contacts, neverCached = neverCached)
             }
         }
     }
