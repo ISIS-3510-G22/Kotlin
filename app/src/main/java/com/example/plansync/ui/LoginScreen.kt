@@ -224,7 +224,7 @@ fun LoginScreen(
                 // ── Log In button ──────────────────────────────────────────
                 Button(
                     onClick = viewModel::login,
-                    enabled = !uiState.isLoading,
+                    enabled = !uiState.isLoading && !uiState.isOffline,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
