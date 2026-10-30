@@ -38,14 +38,17 @@ class ActivityRepository(
     }
 
     suspend fun getCachedActivity(activityId: String): Activity? =
-        getCachedActivities().find { it.id == activityId }
+        ActivityMemoryCache.get(activityId)
+            ?: getCachedActivities().find { it.id == activityId }?.also { ActivityMemoryCache.put(it) }
 
     suspend fun cacheActivities(list: List<Activity>) {
+        ActivityMemoryCache.refresh(list)
         val file = cacheFile() ?: return
         storage.write(file, list.toJsonString { it.toJson() })
     }
 
     suspend fun cacheActivity(activity: Activity) {
+        ActivityMemoryCache.put(activity)
         val file = cacheFile() ?: return
         storage.update(file) { json ->
             val others = json.toJsonList { it.toActivity() }.filter { it.id != activity.id }

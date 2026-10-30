@@ -41,6 +41,7 @@ class AuthRepository(
 
 
     fun signOut() {
+        ActivityMemoryCache.clear()
         auth.signOut()
     }
 
