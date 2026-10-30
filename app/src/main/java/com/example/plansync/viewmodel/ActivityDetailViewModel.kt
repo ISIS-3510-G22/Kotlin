@@ -60,14 +60,16 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
     fun load(activityId: String) {
         this.activityId = activityId
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            val cached = repository.getCachedActivity(activityId)
+            _uiState.update { it.copy(isLoading = cached == null, errorMessage = null) }
+            if (cached != null) show(cached)
 
             val isOnline = _uiState.value.isOnline
             val fromNetwork = if (isOnline) repository.getActivity(activityId) else null
             val activity = fromNetwork?.getOrNull()
                 ?.let { OfflineSyncService.applyPending(listOf(it)).first() }
                 ?.also { repository.cacheActivity(it) }
-                ?: repository.getCachedActivity(activityId)
+                ?: cached
 
             if (activity != null) {
                 show(activity)
@@ -109,7 +111,9 @@ class ActivityDetailViewModel(application: Application) : AndroidViewModel(appli
             _uiState.update { it.copy(isUploadingPhoto = true, errorMessage = null) }
             repository.updatePhoto(activity.id, uri)
                 .onSuccess { photoUrl ->
-                    _uiState.update { it.copy(isUploadingPhoto = false, activity = activity.copy(photoUrl = photoUrl)) }
+                    val updated = activity.copy(photoUrl = photoUrl)
+                    repository.cacheActivity(updated)
+                    _uiState.update { it.copy(isUploadingPhoto = false, activity = updated) }
                 }
                 .onFailure { error -> _uiState.update { it.copy(isUploadingPhoto = false, errorMessage = error.message) } }
         }
