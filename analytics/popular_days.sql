@@ -4,7 +4,7 @@
 --
 -- Source table: Firebase Analytics export in BigQuery
 --   Project:    isis-3510-g22
---   Dataset:    analytics_<firebase_app_id>
+--   Dataset:    analytics_554602798
 --   Table:      events_* (wildcard over daily partitions)
 --
 -- How to run:
@@ -23,7 +23,7 @@ SELECT
   FORMAT_TIMESTAMP('%A', TIMESTAMP_MICROS(event_timestamp), 'America/Bogota') AS day_of_week,
   COUNT(*)                                                                      AS plan_count
 FROM
-  `isis-3510-g22.analytics_<firebase_app_id>.events_*`
+  `isis-3510-g22.analytics_554602798.events_*`
 WHERE
   event_name = 'plan_created'
   AND _TABLE_SUFFIX BETWEEN
