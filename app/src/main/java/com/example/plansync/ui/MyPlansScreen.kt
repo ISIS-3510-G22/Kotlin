@@ -121,6 +121,15 @@ fun MyPlansScreen(
                 )
             }
 
+            if (uiState.reviewQueueError != null) {
+                Text(
+                    text = uiState.reviewQueueError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
             if (uiState.savedPlansError != null) {
                 Text(
                     text = uiState.savedPlansError!!,

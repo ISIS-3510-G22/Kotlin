@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.PlanSnapshotRepository
+import com.example.plansync.data.ReviewQueueRepository
 import com.example.plansync.data.ReviewRepository
 import com.example.plansync.data.WeatherRepository
 import com.example.plansync.model.PendingAction
@@ -28,6 +29,7 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
     private val weatherRepository = WeatherRepository()
     private val reviewRepository = ReviewRepository()
     private val snapshotRepository = PlanSnapshotRepository()
+    private val reviewQueueRepository = ReviewQueueRepository()
     private val networkMonitor = NetworkMonitor.get(application)
 
     data class UiState(
@@ -45,7 +47,8 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
         val bestReviewCount: Int = 0,
         val isOnline: Boolean = true,
         val showingSavedPlans: Boolean = false,
-        val savedPlansError: String? = null
+        val savedPlansError: String? = null,
+        val reviewQueueError: String? = null
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -59,11 +62,18 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
             networkMonitor.isOnline.collect { online ->
                 _uiState.update { it.copy(isOnline = online) }
                 if (wasOnline == false && online) {
+                    sendQueuedReviews()
                     loadPlans()
                 }
                 wasOnline = online
             }
         }
+    }
+
+    private suspend fun sendQueuedReviews() {
+        _uiState.update { it.copy(reviewQueueError = null) }
+        val result = withContext(Dispatchers.IO) { reviewQueueRepository.flush(reviewRepository) }
+        result.onFailure { error -> _uiState.update { it.copy(reviewQueueError = error.message) } }
     }
 
     fun loadPlans() {
