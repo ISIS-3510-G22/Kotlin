@@ -41,9 +41,6 @@ class InviteRepository(
         return storage.read(file).toJsonList { it.toContact() }
     }
 
-    // All reads use Source.SERVER so stale cache is never served.
-    // Any network failure throws — getSuggestedContacts catches it and falls back
-    // to contacts_<uid>.json, preventing the cache from being overwritten with an empty list.
     private suspend fun fetchFromFirestore(uid: String, planId: String): List<Contact> {
         val invitedIds = suspendCancellableCoroutine<Set<String>> { cont ->
             db.collection("plans").document(planId).get(Source.SERVER)

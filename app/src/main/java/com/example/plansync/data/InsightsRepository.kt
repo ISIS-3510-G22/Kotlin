@@ -17,8 +17,6 @@ class InsightsRepository(
 
     private val cacheFile = "popular_days.json"
 
-    // Returns days sorted by count desc; empty if Firestore and cache are both unavailable.
-    // Forces Source.SERVER so stale Firebase cache never hides updated BQ results.
     suspend fun getPopularDays(): List<PopularDay> {
         return try {
             val doc = withTimeout(8_000) {

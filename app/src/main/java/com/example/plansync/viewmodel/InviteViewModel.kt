@@ -46,8 +46,8 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
         val isLoading: Boolean = false,
         val pendingInviteContact: Contact? = null,
         val pendingSync: Boolean = false,
-        val isOnline: Boolean = true,      // tracked here so the Screen never touches NetworkMonitor
-        val errorMessage: String? = null,  // surfaces permanent sync failures from OfflineSyncService
+        val isOnline: Boolean = true,
+        val errorMessage: String? = null,
         // True when offline and no cached contacts exist yet — prevents silent empty list
         val neverCached: Boolean = false
     )
@@ -56,7 +56,6 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
-        // Track connectivity in UiState — Screen reads uiState.isOnline, never NetworkMonitor directly
         networkMonitor.isOnline
             .onEach { online -> _uiState.update { it.copy(isOnline = online) } }
             .launchIn(viewModelScope)
@@ -67,7 +66,6 @@ class InviteViewModel(application: Application) : AndroidViewModel(application) 
                 .filter { it }
                 .collect { currentPlanId?.let { id -> loadContacts(id) } }
         }
-        // Surface permanent sync failures (e.g. queued invite rejected by server)
         viewModelScope.launch {
             OfflineSyncService.syncErrors.collect { msg ->
                 _uiState.update { it.copy(errorMessage = msg) }

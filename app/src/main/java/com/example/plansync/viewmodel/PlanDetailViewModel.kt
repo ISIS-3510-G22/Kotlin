@@ -43,11 +43,10 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
         val showRsvpDialog: Boolean = false,
         val pendingSync: Boolean = false,
         val neverLoaded: Boolean = false,
-        val isOnline: Boolean = true   // tracked here so the Screen never touches NetworkMonitor
+        val isOnline: Boolean = true
     )
 
     init {
-        // Track connectivity in UiState — Screen reads uiState.isOnline, never NetworkMonitor directly
         networkMonitor.isOnline
             .onEach { online -> _uiState.update { it.copy(isOnline = online) } }
             .launchIn(viewModelScope)
@@ -106,12 +105,9 @@ class PlanDetailViewModel(application: Application) : AndroidViewModel(applicati
 
     fun loadPlan(planId: String) {
         currentPlanId = planId
-        // Dispatchers.Main: StateFlow updates must happen on the Main thread to trigger recomposition
         viewModelScope.launch(Dispatchers.Main) {
             _uiState.update { it.copy(isLoading = true, errorMessage = null, neverLoaded = false) }
 
-            // Dispatchers.IO: Firestore Source.SERVER fetch + Room read are blocking I/O —
-            // moved off Main to avoid ANR; result is returned to Main via withContext
             val result = withContext(Dispatchers.IO) { repository.getPlan(planId) }
 
             result

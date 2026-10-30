@@ -34,8 +34,6 @@ object OfflineSyncService {
     private lateinit var appContext: Context
     private val mutex = Mutex()
 
-    // Observer pattern — ViewModels collect this to show the user which queued
-    // item was permanently rejected by the server instead of dropping it silently.
     private val _syncErrors = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val syncErrors: SharedFlow<String> = _syncErrors.asSharedFlow()
 
@@ -138,7 +136,6 @@ object OfflineSyncService {
             if (ok) {
                 pendingActions.remove(action.id)
             } else if (NetworkMonitor.get(appContext).isCurrentlyOnline()) {
-                // Still online but write failed = permanent server rejection; notify and drop
                 _syncErrors.tryEmit("Sync failed: ${actionLabel(action)} was rejected by the server.")
                 pendingActions.remove(action.id)
             } else {
@@ -182,8 +179,6 @@ object OfflineSyncService {
         is PendingAction.SendInvite ->
             inviteRepository.inviteContact(action.planId, action.contactId).isSuccess
         is PendingAction.CreatePlan -> {
-            // Use shared helper: extracts year/month/day in UTC then rebuilds in local
-            // time, fixing the off-by-one-day bug in Bogotá (UTC-5).
             val date = planDateTime(action.dateMillis, action.hour, action.minute)
             val result = planRepository.createPlan(
                 planId      = action.planId,

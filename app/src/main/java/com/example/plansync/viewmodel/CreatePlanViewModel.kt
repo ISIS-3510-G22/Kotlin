@@ -62,7 +62,7 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         val errorMessage: String? = null,
         val isSaved: Boolean = false,
         val pendingSync: Boolean = false,  // queued offline, will sync when back online
-        val isOnline: Boolean = true,      // tracked here so the Screen never touches NetworkMonitor
+        val isOnline: Boolean = true,
         val origin: String? = null,
         val sourceId: String? = null,
         val popularDayLabel: String? = null
@@ -98,7 +98,6 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         loadRecommendedActivities()
         loadDraft()
         loadPopularDays()
-        // Track connectivity in UiState — Screen reads uiState.isOnline, never NetworkMonitor directly
         networkMonitor.isOnline
             .onEach { online -> _uiState.update { it.copy(isOnline = online) } }
             .launchIn(viewModelScope)
@@ -109,7 +108,6 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
                 .filter { it }
                 .collect { loadAvailableActivities() }
         }
-        // Surface permanent sync failures to the user (e.g. queued plan rejected by server)
         viewModelScope.launch {
             OfflineSyncService.syncErrors.collect { msg ->
                 _uiState.update { it.copy(errorMessage = msg) }
