@@ -17,8 +17,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.coroutines.resume
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 
 class PlanRepository(
     private val db: FirebaseFirestore = FirebaseProvider.firestore,
@@ -68,10 +73,10 @@ class PlanRepository(
         if (!planDoc.exists()) return Result.failure(Exception("Plan not found."))
 
         val activityIds = (planDoc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>()
-        val activities = mutableListOf<Activity>()
-        for (actId in activityIds) {
-            fetchActivity(actId)?.let { activities.add(it) }
-        }
+        // Fetch all activities in parallel instead of one-by-one.
+        val activities = coroutineScope {
+            activityIds.map { actId -> async(Dispatchers.IO) { fetchActivity(actId) } }.awaitAll()
+        }.filterNotNull()
 
         val uid = auth.currentUser?.uid
         val planTags = (planDoc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
@@ -84,10 +89,11 @@ class PlanRepository(
         }
         val goingIds = invitations.filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
         val participants = fetchGoingParticipants(goingIds)
-        val totalCost = activities.sumOf { it.price.toDouble() }
-        // Matches Flutter: 0 when no going participants, otherwise cost ÷ going count.
-        val costPerPerson = if (goingIds.isNotEmpty() && totalCost > 0)
-            (totalCost / goingIds.size).toInt() else 0
+        // CPU-bound aggregation runs on the computation thread pool.
+        val costPerPerson = withContext(Dispatchers.Default) {
+            val total = activities.sumOf { it.price.toDouble() }
+            if (goingIds.isNotEmpty() && total > 0) (total / goingIds.size).toInt() else 0
+        }
         return Result.success(
             Plan(
                 id = planDoc.id,
