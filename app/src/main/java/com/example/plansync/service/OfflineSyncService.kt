@@ -136,6 +136,11 @@ object OfflineSyncService {
             profileRepository.addPaymentMethod(action.method) == WriteResult.Committed
         is PendingAction.DeletePaymentMethod ->
             profileRepository.deletePaymentMethod(action.method) == WriteResult.Committed
+        is PendingAction.SetRsvp -> {
+            val status = com.example.plansync.model.RsvpStatus.from(action.rsvp)
+                ?: return false
+            planRepository.setRsvp(action.planId, status).isSuccess
+        }
         is PendingAction.CreatePlan -> {
             val cal = java.util.Calendar.getInstance().apply {
                 timeInMillis = action.dateMillis

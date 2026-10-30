@@ -65,6 +65,10 @@ class PendingActionRepository(
             is PendingAction.DeletePaymentMethod -> json
                 .put("type", "delete_payment_method")
                 .put("method", method.toJson())
+            is PendingAction.SetRsvp -> json
+                .put("type", "set_rsvp")
+                .put("planId", planId)
+                .put("rsvp", rsvp)
             is PendingAction.CreatePlan -> json
                 .put("type", "create_plan")
                 .put("name", name)
@@ -112,6 +116,11 @@ class PendingActionRepository(
             "add_payment_method" -> PendingAction.AddPaymentMethod(
                 method = getJSONObject("method").toPaymentMethod(),
                 id = id
+            )
+            "set_rsvp" -> PendingAction.SetRsvp(
+                planId = getString("planId"),
+                rsvp   = getString("rsvp"),
+                id     = id
             )
             "delete_payment_method" -> PendingAction.DeletePaymentMethod(
                 method = getJSONObject("method").toPaymentMethod(),
