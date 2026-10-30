@@ -18,7 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.example.plansync.viewmodel.ProfileViewModel
 
 @Composable
@@ -113,8 +112,8 @@ fun ProfileScreen(
                 ) {
                     val photoUrl = uiState.user?.photoUrl
                     if (!photoUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = photoUrl,
+                        CachedImage(
+                            url = photoUrl,
                             contentDescription = "Profile photo",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
