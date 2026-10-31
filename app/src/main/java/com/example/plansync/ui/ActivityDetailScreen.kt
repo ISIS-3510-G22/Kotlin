@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -17,7 +18,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Share
@@ -28,10 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.plansync.R
 import com.example.plansync.model.Activity
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.ActivityDetailViewModel
@@ -201,16 +203,15 @@ private fun ActivityPhotoHeader(
                 url = activity.photoUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                placeholder = painterResource(R.drawable.banner_login),
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Icon(
-                imageVector = Icons.Filled.Image,
+            Image(
+                painter = painterResource(R.drawable.banner_login),
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .size(48.dp)
-                    .align(Alignment.Center)
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
         }
 

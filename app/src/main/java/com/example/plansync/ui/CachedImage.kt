@@ -3,6 +3,7 @@ package com.example.plansync.ui
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import coil.ImageLoader
@@ -42,7 +43,8 @@ fun CachedImage(
     url: String,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Crop,
+    placeholder: Painter? = null
 ) {
     val context = LocalContext.current
     AsyncImage(
@@ -54,6 +56,8 @@ fun CachedImage(
         imageLoader = ImageCache.loader(context),
         contentDescription = contentDescription,
         contentScale = contentScale,
+        placeholder = placeholder,
+        error = placeholder,
         modifier = modifier
     )
 }
