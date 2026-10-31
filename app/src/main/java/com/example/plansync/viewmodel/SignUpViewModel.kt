@@ -39,6 +39,10 @@ class SignUpViewModel(
 
     fun createProfile() {
         val current = _uiState.value
+        if (current.password.any { it !in '!'..'~' }) {
+            _uiState.update { it.copy(errorMessage = "Password can't contain spaces, accents or emojis.") }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             repository.signUp(

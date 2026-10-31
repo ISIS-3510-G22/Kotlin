@@ -16,7 +16,6 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Public
@@ -33,9 +32,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.plansync.R
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityVisibility
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.ActivityTab
 import com.example.plansync.viewmodel.MyActivitiesViewModel
@@ -329,14 +330,15 @@ fun ActivityCard(
                         url = activity.photoUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
+                        placeholder = painterResource(R.drawable.activity_placeholder),
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Icon(
-                        imageVector = Icons.Filled.Image,
+                    Image(
+                        painter = painterResource(R.drawable.activity_placeholder),
                         contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(28.dp)
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
