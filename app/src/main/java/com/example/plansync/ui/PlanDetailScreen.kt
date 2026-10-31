@@ -7,8 +7,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -60,6 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -332,7 +336,7 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () ->
         ) {
             ActionButton(
                 icon = Icons.Default.Map,
-                label = "View\nMap",
+                label = "View Map",
                 modifier = Modifier.weight(1f),
                 onClick = {
                     val address = plan.activities.firstOrNull()?.address ?: plan.title
@@ -342,7 +346,7 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () ->
             )
             ActionButton(
                 icon = Icons.Default.Add,
-                label = "Add\nActivity",
+                label = "Add Activity",
                 modifier = Modifier.weight(1f),
                 onClick = onAddActivity
             )
@@ -367,25 +371,29 @@ private fun ActionButton(
         onClick = onClick,
         modifier = modifier.height(64.dp),
         shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = Coral,
             contentColor = Color.White
         )
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp)
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -492,12 +500,13 @@ private fun ActivityTimelineItem(activity: Activity, isLast: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp)
+            .height(IntrinsicSize.Min)
+            .padding(start = 20.dp, end = 20.dp)
     ) {
-        // Left: timeline line + icon
+        // Left: timeline icon + connector line
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(40.dp)
+            modifier = Modifier.width(40.dp).fillMaxHeight()
         ) {
             Box(
                 modifier = Modifier
@@ -517,7 +526,7 @@ private fun ActivityTimelineItem(activity: Activity, isLast: Boolean) {
                 Box(
                     modifier = Modifier
                         .width(2.dp)
-                        .height(24.dp)
+                        .weight(1f)
                         .background(Color(0xFFDDDDDD))
                 )
             }
