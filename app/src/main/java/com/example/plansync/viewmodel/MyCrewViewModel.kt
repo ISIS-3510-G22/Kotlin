@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.CrewDatabase
+import com.example.plansync.data.CrewPreferencesRepository
 import com.example.plansync.data.CrewRepository
 import com.example.plansync.data.CrewSnapshotRepository
 import com.example.plansync.data.FriendRequestQueueRepository
@@ -25,12 +26,16 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 enum class CrewTab { GROUPS, FRIENDS }
 
+private const val COUNT_TIMEOUT_MS = 2_000L
+
 class MyCrewViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = CrewRepository()
     private val snapshotRepository = CrewSnapshotRepository(CrewDatabase.get(application).crewDao())
     private val friendQueueRepository = FriendRequestQueueRepository()
+    private val preferences = CrewPreferencesRepository(application)
     private val networkMonitor = NetworkMonitor.get(application)
+    @Volatile private var tabChosenByUser = false
 
     data class UiState(
         val groups: List<Group> = emptyList(),
@@ -56,6 +61,7 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch { loadSavedTab() }
         viewModelScope.launch {
             var wasOnline: Boolean? = null
             networkMonitor.isOnline.collect { online ->
@@ -67,6 +73,22 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
                 wasOnline = online
             }
         }
+    }
+
+    private suspend fun loadSavedTab() {
+        val result = withContext(Dispatchers.IO) { preferences.getTab() }
+        result
+            .onSuccess { saved ->
+                val tab = when (saved) {
+                    "groups" -> CrewTab.GROUPS
+                    "friends" -> CrewTab.FRIENDS
+                    else -> null
+                }
+                if (tab != null && !tabChosenByUser) {
+                    _uiState.update { it.copy(selectedTab = tab) }
+                }
+            }
+            .onFailure { error -> _uiState.update { it.copy(savedCrewError = error.message) } }
     }
 
     private suspend fun sendQueuedFriendAnswers() {
@@ -82,9 +104,20 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.Main) {
                 _uiState.update {
-                    it.copy(isLoading = true, groupsError = null, friendsError = null, savedCrewError = null, showingSavedCrew = false)
+                    it.copy(
+                        isLoading = true,
+                        groupsError = null,
+                        friendsError = null,
+                        savedCrewError = null,
+                        friendRequestsCountError = null,
+                        groupInvitesCountError = null,
+                        showingSavedCrew = false
+                    )
                 }
             }
+
+            useSavedFriendRequestsCount(overwrite = !online)
+            useSavedGroupInvitesCount()
 
             if (online) {
                 loadOnline()
@@ -113,7 +146,38 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private suspend fun useSavedFriendRequestsCount(overwrite: Boolean) {
+        val saved = preferences.getFriendRequestsCount()
+        val queued = friendQueueRepository.getAll()
+        withContext(Dispatchers.Main) {
+            saved
+                .onSuccess { count ->
+                    val adjusted = count?.let { (it - queued.getOrNull().orEmpty().size).coerceAtLeast(0) }
+                    _uiState.update {
+                        if (overwrite) {
+                            it.copy(friendRequestsCount = adjusted ?: it.friendRequestsCount)
+                        } else {
+                            it.copy(friendRequestsCount = it.friendRequestsCount ?: adjusted)
+                        }
+                    }
+                }
+                .onFailure { error -> _uiState.update { it.copy(friendRequestsCountError = error.message) } }
+            queued.onFailure { error -> _uiState.update { it.copy(friendAnswersError = error.message) } }
+        }
+    }
+
+    private suspend fun useSavedGroupInvitesCount() {
+        val saved = preferences.getGroupInvitesCount()
+        withContext(Dispatchers.Main) {
+            saved
+                .onSuccess { count -> _uiState.update { it.copy(groupInvitesCount = it.groupInvitesCount ?: count) } }
+                .onFailure { error -> _uiState.update { it.copy(groupInvitesCountError = error.message) } }
+        }
+    }
+
     private suspend fun loadOnline() = coroutineScope {
+        launch { loadFriendRequestsCount() }
+        launch { loadGroupInvitesCount() }
         val groupsJob = async(Dispatchers.IO) {
             withTimeoutOrNull(8_000) { repository.getGroups() }
                 ?: Result.failure(Exception("Loading groups timed out."))
@@ -161,8 +225,6 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
             launch { loadGroupMembers() }
             launch { loadFriendPhotos() }
         }
-        launch { loadFriendRequestsCount() }
-        launch { loadGroupInvitesCount() }
     }
 
     private suspend fun saveGroups(groups: List<Group>) {
@@ -180,28 +242,22 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private suspend fun loadGroupInvitesCount() {
-        withContext(Dispatchers.Main) {
-            _uiState.update { it.copy(groupInvitesCountError = null) }
-        }
-
-        val result = repository.getGroupInvites()
-        withContext(Dispatchers.Main) {
-            result
-                .onSuccess { invites -> _uiState.update { it.copy(groupInvitesCount = invites.size) } }
-                .onFailure { error -> _uiState.update { it.copy(groupInvitesCountError = error.message) } }
+        val result = withTimeoutOrNull(COUNT_TIMEOUT_MS) { repository.getGroupInvites() }
+        result?.onSuccess { invites ->
+            withContext(Dispatchers.Main) {
+                _uiState.update { it.copy(groupInvitesCount = invites.size) }
+            }
+            preferences.saveGroupInvitesCount(invites.size).onFailure { showSaveError(it) }
         }
     }
 
     private suspend fun loadFriendRequestsCount() {
-        withContext(Dispatchers.Main) {
-            _uiState.update { it.copy(friendRequestsCountError = null) }
-        }
-
-        val result = repository.getFriendRequests()
-        withContext(Dispatchers.Main) {
-            result
-                .onSuccess { requests -> _uiState.update { it.copy(friendRequestsCount = requests.size) } }
-                .onFailure { error -> _uiState.update { it.copy(friendRequestsCountError = error.message) } }
+        val result = withTimeoutOrNull(COUNT_TIMEOUT_MS) { repository.getFriendRequests() }
+        result?.onSuccess { requests ->
+            withContext(Dispatchers.Main) {
+                _uiState.update { it.copy(friendRequestsCount = requests.size) }
+            }
+            preferences.saveFriendRequestsCount(requests.size).onFailure { showSaveError(it) }
         }
     }
 
@@ -241,6 +297,11 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun selectTab(tab: CrewTab) {
+        tabChosenByUser = true
         _uiState.update { it.copy(selectedTab = tab) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = preferences.saveTab(tab.name.lowercase())
+            result.onFailure { showSaveError(it) }
+        }
     }
 }

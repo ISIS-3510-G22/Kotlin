@@ -1,17 +1,20 @@
 package com.example.plansync.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.CrewRepository
+import com.example.plansync.service.NetworkMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class CreateGroupViewModel(
-    private val repository: CrewRepository = CrewRepository()
-) : ViewModel() {
+class CreateGroupViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = CrewRepository()
+    private val networkMonitor = NetworkMonitor.get(application)
 
     data class UiState(
         val name: String = "",
@@ -32,6 +35,11 @@ class CreateGroupViewModel(
         val current = _uiState.value
         if (current.name.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Please enter a group name.") }
+            return
+        }
+
+        if (!networkMonitor.isCurrentlyOnline()) {
+            _uiState.update { it.copy(errorMessage = "Group functionalities are not available while offline.") }
             return
         }
 
