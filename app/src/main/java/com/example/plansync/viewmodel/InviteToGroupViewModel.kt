@@ -1,22 +1,25 @@
 package com.example.plansync.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.CrewRepository
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.model.Friend
 import com.example.plansync.model.Plan
 import com.example.plansync.model.RsvpStatus
+import com.example.plansync.service.NetworkMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class InviteToGroupViewModel(
-    private val repository: CrewRepository = CrewRepository(),
-    private val planRepository: PlanRepository = PlanRepository()
-) : ViewModel() {
+class InviteToGroupViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = CrewRepository()
+    private val planRepository = PlanRepository()
+    private val networkMonitor = NetworkMonitor.get(application)
 
     data class UiState(
         val friends: List<Friend> = emptyList(),
@@ -79,6 +82,11 @@ class InviteToGroupViewModel(
     }
 
     fun invite(groupId: String, friendId: String) {
+        if (!networkMonitor.isCurrentlyOnline()) {
+            _uiState.update { it.copy(inviteError = "Group functionalities are not available while offline.") }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(inviteError = null) }
 

@@ -44,6 +44,7 @@ fun MyCrewScreen(
     onFriendSelected: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val groupsOffline = !uiState.isOnline || uiState.showingSavedCrew
 
     LaunchedEffect(Unit) {
         viewModel.loadCrew()
@@ -67,7 +68,14 @@ fun MyCrewScreen(
         ) {
             MyCrewTopBar()
 
-            OfflineBanner(isOnline = uiState.isOnline && !uiState.showingSavedCrew, message = "You're offline — showing saved crew")
+            OfflineBanner(
+                isOnline = uiState.isOnline && !uiState.showingSavedCrew,
+                message = if (uiState.selectedTab == CrewTab.GROUPS) {
+                    "You're offline — showing saved crew. Group functionalities are not available while offline."
+                } else {
+                    "You're offline — showing saved crew"
+                }
+            )
 
             MyCrewTabRow(
                 selectedTab = uiState.selectedTab,
@@ -87,6 +95,7 @@ fun MyCrewScreen(
                             groupMembers = uiState.groupMembers,
                             memberIdsByGroup = uiState.memberIdsByGroup,
                             errorMessage = uiState.groupsError,
+                            enabled = !groupsOffline,
                             onGroupSelected = onGroupSelected
                         )
                     }
@@ -103,9 +112,10 @@ fun MyCrewScreen(
             if (uiState.selectedTab == CrewTab.GROUPS) {
                 CountErrorLine(message = uiState.groupInvitesCountError)
                 CountErrorLine(message = uiState.savedCrewError)
-                CrewActionButton(label = "Create Group", onClick = onCreateGroup)
+                CrewActionButton(label = "Create Group", enabled = !groupsOffline, onClick = onCreateGroup)
                 CrewActionButton(
                     label = "New Group Invites" + (uiState.groupInvitesCount?.let { " ($it)" } ?: ""),
+                    enabled = !groupsOffline,
                     onClick = onGroupInvites
                 )
             } else {
@@ -128,6 +138,7 @@ private fun GroupsContent(
     groupMembers: Map<String, User>,
     memberIdsByGroup: Map<String, List<String>>,
     errorMessage: String?,
+    enabled: Boolean,
     onGroupSelected: (String) -> Unit
 ) {
     when {
@@ -143,7 +154,7 @@ private fun GroupsContent(
                         group = group,
                         memberIds = memberIdsByGroup[group.id].orEmpty(),
                         groupMembers = groupMembers,
-                        onClick = { onGroupSelected(group.id) },
+                        onClick = { if (enabled) onGroupSelected(group.id) },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
@@ -260,9 +271,10 @@ private fun CountErrorLine(message: String?) {
 }
 
 @Composable
-private fun CrewActionButton(label: String, onClick: () -> Unit) {
+private fun CrewActionButton(label: String, onClick: () -> Unit, enabled: Boolean = true) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp),
