@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.CrewDatabase
 import com.example.plansync.data.CrewRepository
 import com.example.plansync.data.CrewSnapshotRepository
+import com.example.plansync.data.FriendRequestQueueRepository
 import com.example.plansync.model.CrewSnapshot
 import com.example.plansync.model.Friend
 import com.example.plansync.model.Group
@@ -28,6 +29,7 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
 
     private val repository = CrewRepository()
     private val snapshotRepository = CrewSnapshotRepository(CrewDatabase.get(application).crewDao())
+    private val friendQueueRepository = FriendRequestQueueRepository()
     private val networkMonitor = NetworkMonitor.get(application)
 
     data class UiState(
@@ -46,7 +48,8 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
         val maxGridColumns: Int = 2,
         val isOnline: Boolean = true,
         val showingSavedCrew: Boolean = false,
-        val savedCrewError: String? = null
+        val savedCrewError: String? = null,
+        val friendAnswersError: String? = null
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -58,11 +61,20 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
             networkMonitor.isOnline.collect { online ->
                 _uiState.update { it.copy(isOnline = online) }
                 if (wasOnline == false && online) {
+                    sendQueuedFriendAnswers()
                     loadCrew()
                 }
                 wasOnline = online
             }
         }
+    }
+
+    private suspend fun sendQueuedFriendAnswers() {
+        _uiState.update { it.copy(friendAnswersError = null) }
+        val result = withContext(Dispatchers.IO) {
+            withTimeoutOrNull(8_000) { friendQueueRepository.flush(repository) }
+        }
+        result?.onFailure { error -> _uiState.update { it.copy(friendAnswersError = error.message) } }
     }
 
     fun loadCrew() {

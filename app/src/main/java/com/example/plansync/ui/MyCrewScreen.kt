@@ -110,6 +110,7 @@ fun MyCrewScreen(
                 )
             } else {
                 CountErrorLine(message = uiState.friendRequestsCountError)
+                CountErrorLine(message = uiState.friendAnswersError)
                 CountErrorLine(message = uiState.savedCrewError)
                 CrewActionButton(label = "Add Friend", onClick = onAddFriend)
                 CrewActionButton(
