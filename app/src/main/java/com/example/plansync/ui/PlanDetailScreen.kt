@@ -7,9 +7,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -44,6 +48,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,11 +63,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.plansync.R
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.Participant
@@ -90,48 +100,79 @@ fun PlanDetailScreen(
     onAddActivity: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // Load plan once when the screen first enters composition
     LaunchedEffect(planId) {
         viewModel.loadPlan(planId)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF5F5F5))
-    ) {
-        // ── Top bar ────────────────────────────────────────────────────────
-        PlanDetailTopBar(onBack = onBack)
+    // Show sync errors in a Snackbar when the plan is already loaded;
+    // full-screen error is reserved for load failures with no cached plan.
+    LaunchedEffect(uiState.errorMessage) {
+        if (uiState.plan != null && uiState.errorMessage != null) {
+            snackbarHostState.showSnackbar(uiState.errorMessage!!)
+            viewModel.onErrorShown()
+        }
+    }
 
-        // ── Content: loading / error / data ───────────────────────────────
-        when {
-            uiState.isLoading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Coral)
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = Color(0xFFF5F5F5)
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            PlanDetailTopBar(onBack = onBack)
+            OfflineBanner(isOnline = uiState.isOnline, message = "You're offline — showing cached data")
+
+            // ── Content: loading / error / data ───────────────────────────────
+            when {
+                uiState.isLoading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Coral)
+                    }
                 }
-            }
-            uiState.errorMessage != null -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = uiState.errorMessage!!,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyLarge
+                uiState.neverLoaded -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "Connect to the internet to load this plan.",
+                            color = Color(0xFF888888),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
+                    }
+                }
+                uiState.plan != null -> {
+                    PlanDetailContent(
+                        plan = uiState.plan!!,
+                        onInvite = { onInvite(planId) },
+                        onRsvp = { viewModel.onRsvpTriggered() },
+                        onAddActivity = onAddActivity
                     )
                 }
-            }
-            uiState.plan != null -> {
-                PlanDetailContent(
-                    plan = uiState.plan!!,
-                    onInvite = { onInvite(planId) },
-                    onRsvp = { viewModel.onRsvpTriggered() },
-                    onAddActivity = onAddActivity
-                )
+                uiState.errorMessage != null -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = uiState.errorMessage!!,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
             }
         }
     }
 
     // ── RSVP dialog ────────────────────────────────────────────────────────
+    if (uiState.pendingSync) {
+        OfflineBanner(
+            isOnline = false,
+            message  = "RSVP saved offline — will sync when reconnected"
+        )
+    }
+
     if (uiState.showRsvpDialog && uiState.plan != null) {
         RsvpDialog(
             planTitle = uiState.plan!!.title,
@@ -179,6 +220,17 @@ private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () 
     LazyColumn(modifier = Modifier.fillMaxSize()) {
 
         // Header: title, date, cost, activity count, action buttons
+        item {
+            Image(
+                painter = painterResource(R.drawable.banner_login),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+            )
+        }
+
         item { PlanHeader(plan = plan, onRsvp = onRsvp, onAddActivity = onAddActivity) }
 
         item { HorizontalDivider(color = Color(0xFFDDDDDD), thickness = 1.dp) }
@@ -298,7 +350,7 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () ->
         ) {
             ActionButton(
                 icon = Icons.Default.Map,
-                label = "View\nMap",
+                label = "View Map",
                 modifier = Modifier.weight(1f),
                 onClick = {
                     val address = plan.activities.firstOrNull()?.address ?: plan.title
@@ -308,7 +360,7 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () ->
             )
             ActionButton(
                 icon = Icons.Default.Add,
-                label = "Add\nActivity",
+                label = "Add Activity",
                 modifier = Modifier.weight(1f),
                 onClick = onAddActivity
             )
@@ -333,25 +385,29 @@ private fun ActionButton(
         onClick = onClick,
         modifier = modifier.height(64.dp),
         shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = Coral,
             contentColor = Color.White
         )
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp)
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -437,7 +493,12 @@ private fun ParticipantAvatar(participant: Participant) {
         }
         if (participant.photoUrl.isNotBlank()) {
             AsyncImage(
-                model = participant.photoUrl,
+                model = coil.request.ImageRequest.Builder(LocalContext.current)
+                    .data(participant.photoUrl)
+                    .memoryCacheKey(participant.photoUrl)
+                    .diskCacheKey(participant.photoUrl)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -453,12 +514,13 @@ private fun ActivityTimelineItem(activity: Activity, isLast: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp)
+            .height(IntrinsicSize.Min)
+            .padding(start = 20.dp, end = 20.dp)
     ) {
-        // Left: timeline line + icon
+        // Left: timeline icon + connector line
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(40.dp)
+            modifier = Modifier.width(40.dp).fillMaxHeight()
         ) {
             Box(
                 modifier = Modifier
@@ -478,7 +540,7 @@ private fun ActivityTimelineItem(activity: Activity, isLast: Boolean) {
                 Box(
                     modifier = Modifier
                         .width(2.dp)
-                        .height(24.dp)
+                        .weight(1f)
                         .background(Color(0xFFDDDDDD))
                 )
             }

@@ -4,36 +4,45 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.ActivityRepository
+import com.example.plansync.data.AnalyticsRepository
+import com.example.plansync.data.InsightsRepository
+import com.example.plansync.data.PlanDraftRepository
 import com.example.plansync.data.PlanRepository
+import com.example.plansync.data.planDateTime
 import com.example.plansync.model.Activity
+import com.example.plansync.model.PendingAction
 import com.example.plansync.service.LocationService
+import com.example.plansync.service.NetworkMonitor
+import com.example.plansync.service.OfflineSyncService
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
+import java.util.UUID
 
-/**
- * ViewModel layer — MVVM architecture.
- *
- * Owns UI state for the Create Plan screen.
- * Observer pattern: exposes [uiState] as StateFlow, collected by
- * CreatePlanScreen via collectAsStateWithLifecycle().
- *
- * Design patterns:
- *  - Repository pattern: delegates persistence to PlanRepository / ActivityRepository.
- *  - Derived state: totalEstimatedCost and costPerPerson are computed from
- *    selectedActivities, so the UI always shows a consistent value (smart feature).
- */
 class CreatePlanViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val planRepository = PlanRepository()
-    private val activityRepository = ActivityRepository()
-    private val locationService = LocationService(application)
+    private val planRepository      = PlanRepository()
+    private val activityRepository  = ActivityRepository()
+    private val analyticsRepository = AnalyticsRepository()
+    private val insightsRepository  = InsightsRepository()
+    private val locationService     = LocationService(application)
+    private val draftRepository     = PlanDraftRepository(application)
+    private val networkMonitor      = NetworkMonitor.get(application)
+
+    // Stable for the lifetime of this ViewModel instance — identifies this funnel session.
+    private val flowSessionId = UUID.randomUUID().toString()
+    private var lastStepLogged = 0
 
     data class UiState(
         val planName: String = "",
@@ -51,20 +60,25 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         val showActivityPicker: Boolean = false,
         val isLoading: Boolean = false,
         val errorMessage: String? = null,
-        val isSaved: Boolean = false
+        val isSaved: Boolean = false,
+        val pendingSync: Boolean = false,  // queued offline, will sync when back online
+        val isOnline: Boolean = true,
+        val origin: String? = null,
+        val sourceId: String? = null,
+        val popularDayLabel: String? = null
     ) {
-        /** Smart feature: total cost derived from selected activities' prices. */
         val totalEstimatedCost: Double
             get() = selectedActivities.sumOf { it.price.toDouble() }
 
-        /** Smart feature: cost per person updates live as participant count changes. */
         val costPerPerson: Double
             get() = if (participantCount > 0) totalEstimatedCost / participantCount
                     else totalEstimatedCost
 
         val formattedDate: String
             get() = selectedDateMillis?.let {
-                SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(it))
+                SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }.format(Date(it))
             } ?: ""
 
         val formattedTime: String
@@ -82,15 +96,41 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
     init {
         loadAvailableActivities()
         loadRecommendedActivities()
+        loadDraft()
+        loadPopularDays()
+        networkMonitor.isOnline
+            .onEach { online -> _uiState.update { it.copy(isOnline = online) } }
+            .launchIn(viewModelScope)
+        // Reload activity list on reconnect so the picker isn't stuck on the cached set
+        viewModelScope.launch {
+            networkMonitor.isOnline
+                .distinctUntilChanged()
+                .filter { it }
+                .collect {
+                    OfflineSyncService.syncNow()
+                    loadAvailableActivities()
+                    _uiState.update { it.copy(pendingSync = OfflineSyncService.hasPendingActions()) }
+                }
+        }
+        viewModelScope.launch {
+            OfflineSyncService.syncErrors.collect { msg ->
+                _uiState.update { it.copy(errorMessage = msg) }
+            }
+        }
     }
 
-    // ── Load ───────────────────────────────────────────────────────────────────
+    // ── Init ───────────────────────────────────────────────────────────────────
 
     private fun loadAvailableActivities() {
         viewModelScope.launch {
             activityRepository.getActivities()
                 .onSuccess { activities ->
+                    activityRepository.cacheActivities(activities)
                     _uiState.update { it.copy(availableActivities = activities) }
+                }
+                .onFailure {
+                    val cached = activityRepository.getCachedActivities()
+                    _uiState.update { it.copy(availableActivities = cached) }
                 }
         }
     }
@@ -104,11 +144,69 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun onLocationDetected(location: String) {
-        _uiState.update { it.copy(locationText = location) }
+    private fun loadPopularDays() {
+        viewModelScope.launch {
+            val top = insightsRepository.getPopularDays().firstOrNull()
+            if (top != null) _uiState.update { it.copy(popularDayLabel = top.day) }
+        }
     }
 
-    /** Called after the user grants location permission; resolves GPS → address in background. */
+    private fun loadDraft() {
+        viewModelScope.launch {
+            val draft = draftRepository.load()
+            if (draft.planName.isBlank() && draft.selectedDateMillis == null) return@launch
+            val activityIds = draft.selectedActivityIds.toSet()
+            val matchedActivities = activityRepository.getActivities()
+                .getOrDefault(emptyList())
+                .filter { it.id in activityIds }
+            _uiState.update { current ->
+                current.copy(
+                    planName           = draft.planName,
+                    selectedDateMillis = draft.selectedDateMillis,
+                    selectedHour       = draft.selectedHour,
+                    selectedMinute     = draft.selectedMinute,
+                    locationText       = draft.locationText,
+                    participantCount   = draft.participantCount,
+                    isPublic           = draft.isPublic,
+                    selectedActivities = matchedActivities
+                )
+            }
+        }
+    }
+
+    private fun saveDraft() {
+        viewModelScope.launch {
+            val s = _uiState.value
+            draftRepository.save(
+                PlanDraftRepository.Draft(
+                    planName           = s.planName,
+                    selectedDateMillis = s.selectedDateMillis,
+                    selectedHour       = s.selectedHour,
+                    selectedMinute     = s.selectedMinute,
+                    locationText       = s.locationText,
+                    participantCount   = s.participantCount,
+                    isPublic           = s.isPublic,
+                    selectedActivityIds = s.selectedActivities.map { it.id },
+                    origin             = s.origin,
+                    sourceId           = s.sourceId
+                )
+            )
+        }
+    }
+
+    // ── Origin (set once from nav arg) ─────────────────────────────────────────
+
+    fun setOrigin(origin: String?, sourceId: String?) {
+        _uiState.update { it.copy(origin = origin, sourceId = sourceId) }
+    }
+
+    // ── Location ───────────────────────────────────────────────────────────────
+
+    fun onLocationDetected(location: String) {
+        _uiState.update { it.copy(locationText = location) }
+        saveDraft()
+    }
+
     fun detectLocation() {
         viewModelScope.launch {
             val loc = locationService.currentLocation()
@@ -116,68 +214,110 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
                 locationService.reverseGeocode(loc.latitude, loc.longitude)
             else "Unable to detect location"
             _uiState.update { it.copy(locationText = address) }
+            saveDraft()
         }
     }
 
     // ── Form field changes ─────────────────────────────────────────────────────
 
-    fun onPlanNameChange(name: String)  { _uiState.update { it.copy(planName = name) } }
-    fun onIsPublicChanged(v: Boolean)   { _uiState.update { it.copy(isPublic = v) } }
+    fun onPlanNameChange(name: String) {
+        val wasBlank = _uiState.value.planName.isBlank()
+        _uiState.update { it.copy(planName = name) }
+        saveDraft()
+        if (wasBlank && name.isNotBlank()) logStep(1)
+    }
 
-    /** Smart feature: updates group size, cost-per-person recomputes reactively. */
+    fun onIsPublicChanged(v: Boolean) {
+        _uiState.update { it.copy(isPublic = v) }
+        saveDraft()
+    }
+
     fun onParticipantCountChange(count: Int) {
         _uiState.update { it.copy(participantCount = count.coerceAtLeast(1)) }
+        saveDraft()
     }
 
     // ── Date / Time picker ─────────────────────────────────────────────────────
 
-    fun onShowDatePicker()               { _uiState.update { it.copy(showDatePicker = true) } }
-    fun onHideDatePicker()               { _uiState.update { it.copy(showDatePicker = false) } }
-    fun onDateSelected(millis: Long)     { _uiState.update { it.copy(selectedDateMillis = millis, showDatePicker = false) } }
-    fun onShowTimePicker()               { _uiState.update { it.copy(showTimePicker = true) } }
-    fun onHideTimePicker()               { _uiState.update { it.copy(showTimePicker = false) } }
+    fun onShowDatePicker()  { _uiState.update { it.copy(showDatePicker = true) } }
+    fun onHideDatePicker()  { _uiState.update { it.copy(showDatePicker = false) } }
+    fun onShowTimePicker()  { _uiState.update { it.copy(showTimePicker = true) } }
+    fun onHideTimePicker()  { _uiState.update { it.copy(showTimePicker = false) } }
+
+    fun onDateSelected(millis: Long) {
+        _uiState.update { it.copy(selectedDateMillis = millis, showDatePicker = false) }
+        saveDraft()
+        logStep(2)
+    }
+
     fun onTimeSelected(hour: Int, minute: Int) {
         _uiState.update { it.copy(selectedHour = hour, selectedMinute = minute, showTimePicker = false) }
+        saveDraft()
     }
 
     // ── Activity picker ────────────────────────────────────────────────────────
 
-    fun onShowActivityPicker()           { _uiState.update { it.copy(showActivityPicker = true) } }
-    fun onHideActivityPicker()           { _uiState.update { it.copy(showActivityPicker = false) } }
+    fun onShowActivityPicker()  { _uiState.update { it.copy(showActivityPicker = true) } }
+    fun onHideActivityPicker()  { _uiState.update { it.copy(showActivityPicker = false) } }
 
     fun onActivityToggled(activity: Activity) {
+        val wasEmpty = _uiState.value.selectedActivities.isEmpty()
         _uiState.update { state ->
-            val updated = if (state.selectedActivities.any { it.id == activity.id }) {
+            val updated = if (state.selectedActivities.any { it.id == activity.id })
                 state.selectedActivities.filter { it.id != activity.id }
-            } else {
-                state.selectedActivities + activity
-            }
+            else state.selectedActivities + activity
             state.copy(selectedActivities = updated)
         }
+        saveDraft()
+        if (wasEmpty && _uiState.value.selectedActivities.isNotEmpty()) logStep(3)
     }
 
-    /**
-     * Pre-selects an activity by id — called when navigating from "Add to Plan"
-     * on the activity detail screen so the activity comes pre-populated.
-     */
     fun preSelectActivity(activityId: String) {
         viewModelScope.launch {
             activityRepository.getActivities().onSuccess { activities ->
                 val activity = activities.find { it.id == activityId } ?: return@onSuccess
                 _uiState.update { it.copy(selectedActivities = listOf(activity)) }
+                saveDraft()
             }
         }
     }
 
     fun onErrorDismissed() { _uiState.update { it.copy(errorMessage = null) } }
 
+    fun onPendingSyncDismissed() { _uiState.update { it.copy(pendingSync = false) } }
+
+    // ── Analytics helpers ──────────────────────────────────────────────────────
+
+    private fun logStep(step: Int) {
+        if (step <= lastStepLogged) return
+        lastStepLogged = step
+        val s = _uiState.value
+        analyticsRepository.logEvent(
+            type          = AnalyticsRepository.CREATE_PLAN_STEP,
+            step          = step,
+            flowSessionId = flowSessionId,
+            origin        = s.origin,
+            sourceId      = s.sourceId
+        )
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Log abandoned if the user left mid-funnel without saving.
+        if (!_uiState.value.isSaved && lastStepLogged > 0) {
+            val s = _uiState.value
+            analyticsRepository.logEvent(
+                type          = AnalyticsRepository.CREATE_PLAN_ABANDONED,
+                step          = lastStepLogged,
+                flowSessionId = flowSessionId,
+                origin        = s.origin,
+                sourceId      = s.sourceId
+            )
+        }
+    }
+
     // ── Save ───────────────────────────────────────────────────────────────────
 
-    /**
-     * Validates the form, then calls [PlanRepository.createPlan] to write
-     * the document to Firestore. Sets [UiState.isSaved] on success to trigger
-     * back navigation via LaunchedEffect in the composable.
-     */
     fun onSavePlan() {
         val state = _uiState.value
         if (state.planName.isBlank()) {
@@ -188,24 +328,58 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
             _uiState.update { it.copy(errorMessage = "Please select a date.") }
             return
         }
+        if (planDateTime(state.selectedDateMillis, state.selectedHour, state.selectedMinute).before(Date())) {
+            _uiState.update { it.copy(errorMessage = "The plan date and time must be in the future.") }
+            return
+        }
+
+        val tags = state.selectedActivities.flatMap { it.tags }.filter { it.isNotBlank() }.distinct()
+
+        val planId = UUID.randomUUID().toString()
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+
+            val isOnline = networkMonitor.isCurrentlyOnline()
+            if (!isOnline) {
+                // Queue the write; it will be uploaded by OfflineSyncService when back online.
+                OfflineSyncService.createPlanOffline(
+                    PendingAction.CreatePlan(
+                        planId      = planId,
+                        name        = state.planName,
+                        dateMillis  = state.selectedDateMillis,
+                        hour        = state.selectedHour,
+                        minute      = state.selectedMinute,
+                        isPublic    = state.isPublic,
+                        activityIds = state.selectedActivities.map { it.id },
+                        tags        = tags,
+                        origin      = state.origin,
+                        sourceId    = state.sourceId
+                    )
+                )
+                draftRepository.clear()
+                _uiState.update { it.copy(isLoading = false, pendingSync = true) }
+                return@launch
+            }
+
             planRepository.createPlan(
+                planId      = planId,
                 name        = state.planName,
-                date        = Timestamp(
-                    java.util.Calendar.getInstance().apply {
-                        timeInMillis = state.selectedDateMillis
-                        set(java.util.Calendar.HOUR_OF_DAY, state.selectedHour)
-                        set(java.util.Calendar.MINUTE, state.selectedMinute)
-                        set(java.util.Calendar.SECOND, 0)
-                        set(java.util.Calendar.MILLISECOND, 0)
-                    }.time
-                ),
+                date        = Timestamp(planDateTime(state.selectedDateMillis, state.selectedHour, state.selectedMinute)),
                 isPublic    = state.isPublic,
                 activityIds = state.selectedActivities.map { it.id },
-                tags        = state.selectedActivities.flatMap { it.tags }.filter { it.isNotBlank() }.distinct()
+                tags        = tags,
+                origin      = state.origin,
+                sourceId    = state.sourceId
             ).onSuccess {
+                analyticsRepository.logEvent(
+                    type          = AnalyticsRepository.PLAN_CREATED,
+                    planId        = planId,
+                    flowSessionId = flowSessionId,
+                    origin        = state.origin,
+                    sourceId      = state.sourceId
+                )
+                draftRepository.clear()
                 _uiState.update { it.copy(isLoading = false, isSaved = true) }
             }.onFailure { error ->
                 _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }

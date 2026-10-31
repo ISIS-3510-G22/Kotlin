@@ -1,12 +1,16 @@
 package com.example.plansync.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.AuthRepository
 import com.example.plansync.model.User
+import com.example.plansync.service.NetworkMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -23,9 +27,11 @@ import kotlinx.coroutines.launch
  * The Composable calls functions on this ViewModel only — it never touches
  * [AuthRepository] directly. This keeps the UI layer thin and testable.
  */
-class LoginViewModel(
-    private val repository: AuthRepository = AuthRepository()
-) : ViewModel() {
+class LoginViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = AuthRepository()
+
+    private val networkMonitor = NetworkMonitor.get(application)
 
     /**
      * Immutable snapshot of everything the Login screen needs to render itself.
@@ -36,14 +42,19 @@ class LoginViewModel(
         val password: String = "",
         val isLoading: Boolean = false,
         val errorMessage: String? = null,
-        val loggedInUser: User? = null
+        val loggedInUser: User? = null,
+        val isOffline: Boolean = false
     )
 
-    // Mutable backing field — private so only this ViewModel can write to it
     private val _uiState = MutableStateFlow(UiState())
-
-    // Read-only StateFlow exposed to the UI layer
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    init {
+        // Reactively track connectivity so the button enables/disables without a tap
+        networkMonitor.isOnline
+            .onEach { online -> _uiState.update { it.copy(isOffline = !online) } }
+            .launchIn(viewModelScope)
+    }
 
     /** Called by the UI whenever the email field changes. */
     fun onEmailChange(value: String) {
@@ -69,6 +80,11 @@ class LoginViewModel(
         val current = _uiState.value
         if (current.email.isBlank() || current.password.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Please enter your email and password.") }
+            return
+        }
+
+        if (!networkMonitor.isCurrentlyOnline()) {
+            _uiState.update { it.copy(errorMessage = "No internet connection. Please try again when online.") }
             return
         }
 

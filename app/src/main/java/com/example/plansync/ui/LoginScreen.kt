@@ -1,5 +1,6 @@
 package com.example.plansync.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -46,6 +47,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.plansync.R
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.ui.theme.CoralLight
 import com.example.plansync.viewmodel.LoginViewModel
@@ -79,6 +81,11 @@ fun LoginScreen(
             .background(CoralLight),
         contentAlignment = Alignment.Center
     ) {
+        OfflineBanner(
+            isOnline = !uiState.isOffline,
+            message  = "You're offline — login requires a connection",
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -95,20 +102,13 @@ fun LoginScreen(
             ) {
 
                 // ── Logo icon ──────────────────────────────────────────────
-                Box(
+                Image(
+                    painter = painterResource(R.drawable.app_icon),
+                    contentDescription = "PlanSync logo",
                     modifier = Modifier
                         .size(72.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xFFEEEEEE)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Explore,
-                        contentDescription = "PlanSync logo",
-                        modifier = Modifier.size(36.dp),
-                        tint = Color(0xFF444444)
-                    )
-                }
+                )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -214,7 +214,7 @@ fun LoginScreen(
                 // ── Log In button ──────────────────────────────────────────
                 Button(
                     onClick = viewModel::login,
-                    enabled = !uiState.isLoading,
+                    enabled = !uiState.isLoading && !uiState.isOffline,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),

@@ -61,6 +61,13 @@ fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (St
             contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 16.dp)
         ) {
             item {
+                OfflineBanner(
+                    isOnline = uiState.isOnline,
+                    message = "You're offline. Showing plans saved on your phone, search and filters still work."
+                )
+            }
+
+            item {
                 Text(
                     text = "Explore",
                     style = MaterialTheme.typography.headlineMedium,
@@ -144,7 +151,13 @@ fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (St
             } else if (uiState.filteredPlans.isEmpty()) {
                 item {
                     Text(
-                        text = "No plans match your filters.",
+                        text = when {
+                            uiState.plans.isEmpty() && !uiState.isOnline ->
+                                "No plans saved on your phone yet. Connect to the internet to explore plans."
+                            uiState.plans.isEmpty() && uiState.errorMessage != null ->
+                                "We couldn't load plans. Please try again."
+                            else -> "No plans match your filters."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -418,7 +431,7 @@ private data class NavItem(
 private val bottomNavItems = listOf(
     NavItem("Explore", Icons.Filled.Explore),
     NavItem("My Plans", Icons.Filled.CalendarMonth),
-    NavItem("My Activities", Icons.Filled.Checklist),
+    NavItem("Activities", Icons.Filled.Checklist),
     NavItem("My Crew", Icons.Filled.Groups),
     NavItem("My Profile", Icons.Filled.Person)
 )

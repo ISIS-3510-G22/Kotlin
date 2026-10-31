@@ -1,5 +1,11 @@
 package com.example.plansync.ui
 
+import android.widget.Toast
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -12,9 +18,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,11 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
+import com.example.plansync.R
 import com.example.plansync.model.Activity
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.ActivityDetailViewModel
@@ -37,10 +44,43 @@ fun ActivityDetailScreen(
     viewModel: ActivityDetailViewModel = viewModel(),
     onBack: () -> Unit = {},
     onEdit: (String) -> Unit = {},
-    onAddToPlan: (String) -> Unit = {}
+    onAddToPlan: (String) -> Unit = {},
+    onDeleted: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var showPhotoSourceDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.didDelete) {
+        if (uiState.didDelete) {
+            if (uiState.deletedOffline) {
+                Toast.makeText(context, "Deleted on your phone. It will sync when you reconnect.", Toast.LENGTH_LONG).show()
+            }
+            onDeleted()
+        }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete activity?") },
+            text = { Text("This activity will be deleted for everyone. This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    viewModel.deleteActivity()
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     LaunchedEffect(activityId) {
         viewModel.load(activityId)
@@ -90,19 +130,36 @@ fun ActivityDetailScreen(
                         .padding(innerPadding)
                         .verticalScroll(rememberScrollState())
                 ) {
+                    OfflineBanner(
+                        isOnline = uiState.isOnline,
+                        message = "You're offline. Likes will sync when you reconnect, changing the photo needs a connection."
+                    )
                     ActivityPhotoHeader(
                         activity = activity,
                         isOwner = uiState.isOwner,
+                        canChangePhoto = uiState.isOnline && !uiState.isPending,
                         isUploadingPhoto = uiState.isUploadingPhoto,
+                        isSharing = uiState.isSharing,
+                        isDeleting = uiState.isDeleting,
                         onBack = onBack,
                         onEdit = { onEdit(activity.id) },
-                        onChangePhoto = { showPhotoSourceDialog = true }
+                        onChangePhoto = { showPhotoSourceDialog = true },
+                        onShare = viewModel::shareActivity,
+                        onDelete = { showDeleteDialog = true }
                     )
                     ActivityInfo(
                         activity = activity,
                         isLiked = uiState.isLiked,
                         onToggleLike = viewModel::toggleLike
                     )
+                    if (uiState.isPending) {
+                        Text(
+                            text = "This activity is waiting to upload. It will sync when you're back online.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF888888),
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
                     uiState.errorMessage?.let { message ->
                         Text(
                             text = message,
@@ -121,10 +178,15 @@ fun ActivityDetailScreen(
 private fun ActivityPhotoHeader(
     activity: Activity,
     isOwner: Boolean,
+    canChangePhoto: Boolean,
     isUploadingPhoto: Boolean,
+    isSharing: Boolean,
+    isDeleting: Boolean,
     onBack: () -> Unit,
     onEdit: () -> Unit,
-    onChangePhoto: () -> Unit
+    onChangePhoto: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -137,20 +199,19 @@ private fun ActivityPhotoHeader(
             )
     ) {
         if (activity.photoUrl.isNotBlank()) {
-            AsyncImage(
-                model = activity.photoUrl,
+            CachedImage(
+                url = activity.photoUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                placeholder = painterResource(R.drawable.banner_login),
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Icon(
-                imageVector = Icons.Filled.Image,
+            Image(
+                painter = painterResource(R.drawable.banner_login),
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .size(48.dp)
-                    .align(Alignment.Center)
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
         }
 
@@ -167,13 +228,29 @@ private fun ActivityPhotoHeader(
             HeaderButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Coral)
             }
-            if (isOwner) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HeaderButton(onClick = onChangePhoto) {
-                        Icon(Icons.Filled.PhotoCamera, contentDescription = "Change photo", tint = Coral)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HeaderButton(onClick = { if (!isSharing) onShare() }) {
+                    if (isSharing) {
+                        CircularProgressIndicator(color = Coral, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    } else {
+                        Icon(Icons.Filled.Share, contentDescription = "Share activity", tint = Coral)
+                    }
+                }
+                if (isOwner) {
+                    if (canChangePhoto) {
+                        HeaderButton(onClick = onChangePhoto) {
+                            Icon(Icons.Filled.PhotoCamera, contentDescription = "Change photo", tint = Coral)
+                        }
                     }
                     HeaderButton(onClick = onEdit) {
                         Icon(Icons.Filled.Edit, contentDescription = "Edit activity", tint = Coral)
+                    }
+                    HeaderButton(onClick = { if (!isDeleting) onDelete() }) {
+                        if (isDeleting) {
+                            CircularProgressIndicator(color = Coral, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                        } else {
+                            Icon(Icons.Filled.Delete, contentDescription = "Delete activity", tint = Coral)
+                        }
                     }
                 }
             }

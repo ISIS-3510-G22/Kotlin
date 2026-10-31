@@ -93,10 +93,12 @@ fun LeaveReviewScreen(
             )
         }
     ) { innerPadding ->
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        OfflineBanner(isOnline = uiState.isOnline, message = "You're offline — review will be sent when reconnected")
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+                .fillMaxWidth()
+                .weight(1f),
             contentAlignment = Alignment.Center
         ) {
             when {
@@ -116,29 +118,31 @@ fun LeaveReviewScreen(
                             .fillMaxSize()
                             .padding(16.dp)
                     ) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, Color(0xFF222222)),
-                            colors = CardDefaults.cardColors(containerColor = Color.White)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = uiState.planTitle,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = uiState.planDate
-                                        ?.let { SimpleDateFormat("MMM d", Locale.US).format(it) }
-                                        .orEmpty(),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color(0xFF666666)
-                                )
+                        if (uiState.planTitle.isNotBlank()) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, Color(0xFF222222)),
+                                colors = CardDefaults.cardColors(containerColor = Color.White)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = uiState.planTitle,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = uiState.planDate
+                                            ?.let { SimpleDateFormat("MMM d", Locale.US).format(it) }
+                                            .orEmpty(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color(0xFF666666)
+                                    )
+                                }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                            Spacer(modifier = Modifier.height(20.dp))
+                        }
 
                         Text(
                             text = "How would you rate your experience?",
@@ -184,6 +188,15 @@ fun LeaveReviewScreen(
                             )
                         )
 
+                        if (uiState.queueErrorMessage != null) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = uiState.queueErrorMessage!!,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+
                         if (uiState.saveErrorMessage != null) {
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
@@ -209,6 +222,7 @@ fun LeaveReviewScreen(
                     }
                 }
             }
+        }
         }
     }
 }

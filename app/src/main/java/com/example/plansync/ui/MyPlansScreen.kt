@@ -105,6 +105,8 @@ fun MyPlansScreen(
         ) {
             MyPlansTopBar(onCreatePlan = onCreatePlan)
 
+            OfflineBanner(isOnline = uiState.isOnline && !uiState.showingSavedPlans, message = "You're offline — showing saved plans")
+
             MyPlansTabRow(
                 selectedTab = uiState.selectedTab,
                 onTabSelected = viewModel::selectTab
@@ -113,6 +115,24 @@ fun MyPlansScreen(
             if (uiState.respondError != null) {
                 Text(
                     text = uiState.respondError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
+            if (uiState.reviewQueueError != null) {
+                Text(
+                    text = uiState.reviewQueueError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
+            if (uiState.savedPlansError != null) {
+                Text(
+                    text = uiState.savedPlansError!!,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -523,7 +543,7 @@ private data class MyPlansNavItem(
 private val myPlansNavItems = listOf(
     MyPlansNavItem("Explore", Icons.Filled.Explore),
     MyPlansNavItem("My Plans", Icons.Filled.CalendarMonth),
-    MyPlansNavItem("My Activities", Icons.Filled.Checklist),
+    MyPlansNavItem("Activities", Icons.Filled.Checklist),
     MyPlansNavItem("My Crew", Icons.Filled.Groups),
     MyPlansNavItem("My Profile", Icons.Filled.Person)
 )

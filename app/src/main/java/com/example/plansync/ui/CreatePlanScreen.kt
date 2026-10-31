@@ -50,6 +50,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -67,6 +68,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.plansync.model.Activity
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.CreatePlanViewModel
+import java.util.Calendar
+import java.util.TimeZone
 
 /**
  * UI layer — Composable screen for creating a new Plan.
@@ -87,14 +90,19 @@ import com.example.plansync.viewmodel.CreatePlanViewModel
 fun CreatePlanScreen(
     viewModel: CreatePlanViewModel = viewModel(),
     preselectedActivityId: String? = null,
+    origin: String? = null,
+    sourceId: String? = null,
     onBack: () -> Unit = {},
     onSaved: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Pre-select activity if navigated from "Add to Plan"
     LaunchedEffect(preselectedActivityId) {
         if (preselectedActivityId != null) viewModel.preSelectActivity(preselectedActivityId)
+    }
+
+    LaunchedEffect(origin, sourceId) {
+        viewModel.setOrigin(origin, sourceId)
     }
 
     LaunchedEffect(uiState.isSaved) {
@@ -108,8 +116,16 @@ fun CreatePlanScreen(
 
     // ── Date picker dialog ────────────────────────────────────────────────────
     if (uiState.showDatePicker) {
+        val now = Calendar.getInstance()
+        val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        utc.clear()
+        utc.set(now.get(Calendar.YEAR), now.get(Calendar.MONTH), now.get(Calendar.DAY_OF_MONTH))
+        val todayUtcMillis = utc.timeInMillis
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = uiState.selectedDateMillis
+            initialSelectedDateMillis = uiState.selectedDateMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis >= todayUtcMillis
+            }
         )
         DatePickerDialog(
             onDismissRequest = { viewModel.onHideDatePicker() },
@@ -171,9 +187,31 @@ fun CreatePlanScreen(
         )
     }
 
+    // Offline-queued banner — shown after a write is queued while offline
+    if (uiState.pendingSync) {
+        AlertDialog(
+            onDismissRequest = { viewModel.onPendingSyncDismissed() },
+            confirmButton = {
+                TextButton(onClick = onSaved) { Text("OK", color = Coral) }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.onPendingSyncDismissed() }) {
+                    Text("Stay", color = Color(0xFF888888))
+                }
+            },
+            title = { Text("Saved offline") },
+            text  = { Text("Your plan has been queued and will sync automatically when you're back online.") }
+        )
+    }
+
     Scaffold(
         containerColor = Color(0xFFF5F5F5),
-        topBar = { CreatePlanTopBar(onBack = onBack) },
+        topBar = {
+            Column {
+                CreatePlanTopBar(onBack = onBack)
+                OfflineBanner(isOnline = uiState.isOnline, message = "You're offline — plan will save when reconnected")
+            }
+        },
         bottomBar = {
             CreatePlanBottomBar(
                 isLoading = uiState.isLoading,
@@ -394,6 +432,33 @@ fun CreatePlanScreen(
                 }
             }
 
+            // ── Popular day insight ──────────────────────────────────────────
+            uiState.popularDayLabel?.let { day ->
+                item {
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3F0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                            Text(
+                                "INSIGHT",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Coral,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "$day is the most popular day to go out for plans",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF555555)
+                            )
+                        }
+                    }
+                }
+            }
+
             // ── Cost card ────────────────────────────────────────────────────
             item {
                 Card(
@@ -440,7 +505,7 @@ private fun ActivityPickerDialog(
         title = { Text("Add Activities", fontWeight = FontWeight.Bold) },
         text = {
             if (available.isEmpty()) {
-                Text("No activities found. Create some in My Activities first.", color = Color(0xFF888888))
+                Text("No activities found. Create some in Activities first.", color = Color(0xFF888888))
             } else {
                 Column {
                     available.forEach { activity ->

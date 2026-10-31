@@ -1,6 +1,7 @@
 package com.example.plansync.data
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.Invitation
@@ -10,6 +11,7 @@ import com.example.plansync.model.PlanStatus
 import com.example.plansync.model.RsvpStatus
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import java.util.UUID
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
@@ -17,12 +19,20 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.coroutines.resume
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 class PlanRepository(
     private val db: FirebaseFirestore = FirebaseProvider.firestore,
-    private val auth: FirebaseAuth = FirebaseProvider.auth
+    private val auth: FirebaseAuth = FirebaseProvider.auth,
+    private val planDao: PlanDao? = null
 ) {
 
 
@@ -32,17 +42,20 @@ class PlanRepository(
      * participantsIds, activityIds, tags, invitations.
      */
     suspend fun createPlan(
+        planId: String = UUID.randomUUID().toString(),
         name: String,
         date: Timestamp,
         isPublic: Boolean,
         activityIds: List<String>,
-        tags: List<String>
+        tags: List<String>,
+        origin: String? = null,
+        sourceId: String? = null
     ): Result<String> {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
 
         return suspendCancellableCoroutine { continuation ->
-            val data = hashMapOf(
+            val data = hashMapOf<String, Any?>(
                 "name"             to name,
                 "date"             to date,
                 "isPublic"         to isPublic,
@@ -51,27 +64,35 @@ class PlanRepository(
                 "activityIds"      to activityIds,
                 "tags"             to tags,
                 "invitations"      to listOf(mapOf("userId" to uid, "rsvp" to "going"))
-            )
-            db.collection("plans").add(data)
-                .addOnSuccessListener { ref -> continuation.resume(Result.success(ref.id)) }
-                .addOnFailureListener { e  -> continuation.resume(Result.failure(e)) }
+            ).apply {
+                origin?.let   { put("origin", it) }
+                sourceId?.let { put("sourceId", it) }
+            }
+            db.collection("plans").document(planId).set(data)
+                .addOnSuccessListener { continuation.resume(Result.success(planId)) }
+                .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
     }
 
     suspend fun getPlan(planId: String): Result<Plan> {
-        val planDoc = suspendCancellableCoroutine<DocumentSnapshot?> { cont ->
-            db.collection("plans").document(planId).get()
-                .addOnSuccessListener { cont.resume(it) }
-                .addOnFailureListener { cont.resume(null) }
-        } ?: return Result.failure(Exception("Plan not found."))
+        // IO: force server fetch, skip Firestore's local cache; 8s timeout then fall back to Room
+        val planDoc: DocumentSnapshot? = try {
+            withTimeout(8_000) {
+                withContext(Dispatchers.IO) {
+                    db.collection("plans").document(planId).get(Source.SERVER).await()
+                }
+            }
+        } catch (_: Exception) { null }
 
-        if (!planDoc.exists()) return Result.failure(Exception("Plan not found."))
+        if (planDoc == null || !planDoc.exists()) {
+            return roomFallback(planId)
+        }
 
         val activityIds = (planDoc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>()
-        val activities = mutableListOf<Activity>()
-        for (actId in activityIds) {
-            fetchActivity(actId)?.let { activities.add(it) }
-        }
+        // Fetch all activities in parallel instead of one-by-one.
+        val activities = coroutineScope {
+            activityIds.map { actId -> async(Dispatchers.IO) { fetchActivity(actId) } }.awaitAll()
+        }.filterNotNull()
 
         val uid = auth.currentUser?.uid
         val planTags = (planDoc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
@@ -84,31 +105,52 @@ class PlanRepository(
         }
         val goingIds = invitations.filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
         val participants = fetchGoingParticipants(goingIds)
-        val totalCost = activities.sumOf { it.price.toDouble() }
-        // Matches Flutter: 0 when no going participants, otherwise cost ÷ going count.
-        val costPerPerson = if (goingIds.isNotEmpty() && totalCost > 0)
-            (totalCost / goingIds.size).toInt() else 0
-        return Result.success(
-            Plan(
-                id = planDoc.id,
-                title = planDoc.getString("name").orEmpty(),
-                date = planDate
-                    ?.let { SimpleDateFormat("MMM d, yyyy", Locale.US).format(it) }
-                    .orEmpty(),
-                estimatedCostPerPerson = costPerPerson,
-                participants = participants,
-                activities = activities,
-                status = status,
-                activityIds = activityIds,
-                category = planTags.firstOrNull().orEmpty(),
-                invitations = invitations
-            )
+        // CPU-bound aggregation runs on the computation thread pool.
+        val costPerPerson = withContext(Dispatchers.Default) {
+            val total = activities.sumOf { it.price.toDouble() }
+            if (goingIds.isNotEmpty() && total > 0) (total / goingIds.size).toInt() else 0
+        }
+        val plan = Plan(
+            id = planDoc.id,
+            title = planDoc.getString("name").orEmpty(),
+            date = planDate
+                ?.let { SimpleDateFormat("MMM d, yyyy", Locale.US).format(it) }
+                .orEmpty(),
+            estimatedCostPerPerson = costPerPerson,
+            participants = participants,
+            activities = activities,
+            status = status,
+            activityIds = activityIds,
+            category = planTags.firstOrNull().orEmpty(),
+            invitations = invitations
         )
+
+        // IO: write to Room so offline opens can serve cached data
+        planDao?.let { dao ->
+            withContext(Dispatchers.IO) {
+                dao.upsertPlan(plan.toEntity())
+                dao.deleteActivities(planDoc.id)
+                dao.upsertActivities(activities.map { it.toEntity(planDoc.id) })
+                dao.deleteParticipants(planDoc.id)
+                dao.upsertParticipants(participants.map { it.toEntity(planDoc.id) })
+            }
+        }
+
+        return Result.success(plan)
+    }
+
+    private suspend fun roomFallback(planId: String): Result<Plan> {
+        val dao = planDao ?: return Result.failure(Exception("connect_to_load"))
+        val entity = withContext(Dispatchers.IO) { dao.getPlan(planId) }
+            ?: return Result.failure(Exception("connect_to_load"))
+        val activities = withContext(Dispatchers.IO) { dao.getActivities(planId) }.map { it.toActivity() }
+        val participants = withContext(Dispatchers.IO) { dao.getParticipants(planId) }.map { it.toParticipant() }
+        return Result.success(entity.toPlan(activities, participants))
     }
 
     private suspend fun fetchActivity(activityId: String): Activity? =
         suspendCancellableCoroutine { continuation ->
-            db.collection("activities").document(activityId).get()
+            db.collection("activities").document(activityId).get(Source.SERVER)
                 .addOnSuccessListener { doc ->
                     if (!doc.exists()) { continuation.resume(null); return@addOnSuccessListener }
                     val actTags = (doc.get("tags") as? List<*>).orEmpty().filterIsInstance<String>()
@@ -387,7 +429,15 @@ class PlanRepository(
     private suspend fun fetchGoingParticipants(goingIds: List<String>): List<Participant> {
         if (goingIds.isEmpty()) return emptyList()
         val participants = mutableListOf<Participant>()
-        goingIds.chunked(10).forEach { batch ->
+        val uncachedIds = mutableListOf<String>()
+
+        // LRU cache check — serve warm profiles without a Firestore round-trip
+        goingIds.forEach { uid ->
+            val cached = UserProfileCache.get(uid)
+            if (cached != null) participants.add(cached) else uncachedIds.add(uid)
+        }
+
+        uncachedIds.chunked(10).forEach { batch ->
             suspendCancellableCoroutine<Unit> { cont ->
                 db.collection("users")
                     .whereIn(FieldPath.documentId(), batch)
@@ -396,14 +446,14 @@ class PlanRepository(
                         snapshot.documents.forEach { doc ->
                             val name = doc.getString("name").orEmpty()
                             val lastName = doc.getString("lastName").orEmpty()
-                            participants.add(
-                                Participant(
-                                    id = doc.id,
-                                    initials = buildInitials(name, lastName),
-                                    avatarColorIndex = participants.size % 4,
-                                    photoUrl = doc.getString("photoUrl").orEmpty()
-                                )
+                            val p = Participant(
+                                id = doc.id,
+                                initials = buildInitials(name, lastName),
+                                avatarColorIndex = participants.size % 4,
+                                photoUrl = doc.getString("photoUrl").orEmpty()
                             )
+                            UserProfileCache.put(doc.id, p)
+                            participants.add(p)
                         }
                         cont.resume(Unit)
                     }

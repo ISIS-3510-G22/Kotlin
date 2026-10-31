@@ -18,7 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.example.plansync.viewmodel.ProfileViewModel
 
 @Composable
@@ -41,6 +40,26 @@ fun ProfileScreen(
 
     LaunchedEffect(uiState.isLoggedOut) {
         if (uiState.isLoggedOut) onLoggedOut()
+    }
+
+    if (uiState.showUnsyncedWarning) {
+        AlertDialog(
+            onDismissRequest = viewModel::onUnsyncedWarningDismissed,
+            title = { Text("You have unsynced changes") },
+            text = {
+                Text("Some changes haven't been uploaded yet. They'll sync the next time you log in on this phone with internet. Log out anyway?")
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::logOut) {
+                    Text("Log out", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::onUnsyncedWarningDismissed) {
+                    Text("Stay")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -71,6 +90,11 @@ fun ProfileScreen(
                 modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp)
             )
 
+            OfflineBanner(
+                isOnline = uiState.isOnline,
+                message = "You're offline. Showing the profile saved on your phone, your edits will sync when you reconnect."
+            )
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -88,8 +112,8 @@ fun ProfileScreen(
                 ) {
                     val photoUrl = uiState.user?.photoUrl
                     if (!photoUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = photoUrl,
+                        CachedImage(
+                            url = photoUrl,
                             contentDescription = "Profile photo",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
@@ -124,7 +148,7 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(32.dp))
 
                 Surface(
-                    onClick = viewModel::logOut,
+                    onClick = viewModel::onLogOutClick,
                     shape = RoundedCornerShape(50),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.fillMaxWidth()
@@ -162,7 +186,7 @@ private data class ProfileNavItem(
 private val profileNavItems = listOf(
     ProfileNavItem("Explore", Icons.Filled.Explore),
     ProfileNavItem("My Plans", Icons.Filled.CalendarMonth),
-    ProfileNavItem("My Activities", Icons.Filled.Checklist),
+    ProfileNavItem("Activities", Icons.Filled.Checklist),
     ProfileNavItem("My Crew", Icons.Filled.Groups),
     ProfileNavItem("My Profile", Icons.Filled.Person)
 )

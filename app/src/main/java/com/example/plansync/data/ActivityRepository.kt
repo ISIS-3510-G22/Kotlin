@@ -17,7 +17,8 @@ import kotlinx.coroutines.tasks.await
 
 class ActivityRepository(
     private val db: FirebaseFirestore = FirebaseProvider.firestore,
-    private val auth: FirebaseAuth = FirebaseProvider.auth
+    private val auth: FirebaseAuth = FirebaseProvider.auth,
+    private val dao: ActivityDao = ActivityDatabase.dao
 ) {
 
     private val activities = db.collection("activities")
@@ -26,6 +27,60 @@ class ActivityRepository(
         .collection("runs")
 
     val currentUserId: String? get() = auth.currentUser?.uid
+
+    fun newActivityId(): String = activities.document().id
+
+    suspend fun getCachedActivities(): List<Activity> {
+        val uid = currentUserId ?: return emptyList()
+        val likes = dao.getLikes(uid).groupBy { it.activityId }
+        val tags = dao.getTags(uid).groupBy { it.activityId }
+        return dao.getActivities(uid).map { it.toActivity(likes[it.id].orEmpty(), tags[it.id].orEmpty()) }
+    }
+
+    suspend fun getCachedActivity(activityId: String): Activity? {
+        ActivityMemoryCache.get(activityId)?.let { return it }
+        val uid = currentUserId ?: return null
+        val entity = dao.getActivity(uid, activityId) ?: return null
+        return entity.toActivity(dao.getLikes(uid, activityId), dao.getTags(uid, activityId))
+            .also { ActivityMemoryCache.put(it) }
+    }
+
+    suspend fun cacheActivities(list: List<Activity>) {
+        ActivityMemoryCache.refresh(list)
+        val uid = currentUserId ?: return
+        dao.replaceAll(
+            uid = uid,
+            activities = list.mapIndexed { i, activity -> activity.toEntity(uid, i) },
+            likes = list.flatMap { it.toLikeEntities(uid) },
+            tags = list.flatMap { it.toTagEntities(uid) }
+        )
+    }
+
+    suspend fun cacheActivity(activity: Activity) {
+        ActivityMemoryCache.put(activity)
+        val uid = currentUserId ?: return
+        val position = (dao.firstPosition(uid) ?: 0) - 1
+        dao.save(activity.toEntity(uid, position), activity.toLikeEntities(uid), activity.toTagEntities(uid))
+    }
+
+    suspend fun removeCachedActivity(activityId: String) {
+        ActivityMemoryCache.remove(activityId)
+        val uid = currentUserId ?: return
+        dao.deleteActivity(uid, activityId)
+    }
+
+    suspend fun deleteActivity(activityId: String, photoUrl: String): Result<Unit> {
+        val result = suspendCancellableCoroutine { continuation ->
+            activities.document(activityId).delete()
+                .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
+                .addOnFailureListener { e -> continuation.resume(Result.failure<Unit>(e)) }
+        }
+        if (result.isSuccess) {
+            if (photoUrl.isNotBlank()) StorageRepository().deleteImage(photoUrl)
+            removeCachedActivity(activityId)
+        }
+        return result
+    }
 
     suspend fun getActivities(): Result<List<Activity>> {
         val uid = auth.currentUser?.uid
@@ -61,7 +116,7 @@ class ActivityRepository(
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
 
-    suspend fun getRecommended(): Result<List<Activity>> = runCatching {
+    suspend fun getRecommendedIds(): Result<List<String>> = runCatching {
         val uid = auth.currentUser?.uid ?: throw Exception("No active session.")
         val runId = recommendationRuns.document("latest").get().await().getString("latestRunId")
             ?: return@runCatching emptyList()
@@ -72,7 +127,11 @@ class ActivityRepository(
             .await()
         val idsMap = output.documents.firstOrNull()?.get("activity_ids") as? Map<*, *>
             ?: return@runCatching emptyList()
-        val ids = List(idsMap.size) { i -> idsMap[i.toString()] as String }
+        List(idsMap.size) { i -> idsMap[i.toString()] as String }
+    }
+
+    suspend fun getRecommended(): Result<List<Activity>> = runCatching {
+        val ids = getRecommendedIds().getOrThrow()
         if (ids.isEmpty()) return@runCatching emptyList()
         activities.whereIn(FieldPath.documentId(), ids).get().await()
             .documents.map { it.toActivity() }
@@ -113,7 +172,8 @@ class ActivityRepository(
         notes: String,
         visibility: ActivityVisibility,
         lat: Double?,
-        lng: Double?
+        lng: Double?,
+        isNew: Boolean = activityId == null
     ): Result<Unit> {
         val uid = auth.currentUser?.uid
             ?: return Result.failure(Exception("No active session."))
@@ -130,11 +190,11 @@ class ActivityRepository(
             data["lat"] = lat
             data["lng"] = lng
         }
-        if (activityId == null) {
+        if (isNew) {
             data["ownerId"] = uid
             data["likedBy"] = emptyList<String>()
         }
-        val doc = if (activityId == null) activities.document() else activities.document(activityId)
+        val doc = activityId?.let { activities.document(it) } ?: activities.document()
         batch.set(doc, data, SetOptions.merge())
         newCustomTags.forEach { tag ->
             batch.set(

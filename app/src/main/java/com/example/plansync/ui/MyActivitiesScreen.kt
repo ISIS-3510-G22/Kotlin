@@ -1,11 +1,13 @@
 package com.example.plansync.ui
 
+import android.text.format.DateUtils
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -14,8 +16,9 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,12 +28,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.plansync.R
 import com.example.plansync.model.Activity
-import coil.compose.AsyncImage
+import com.example.plansync.model.ActivityVisibility
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.viewmodel.ActivityTab
 import com.example.plansync.viewmodel.MyActivitiesViewModel
@@ -86,10 +92,24 @@ fun MyActivitiesScreen(
         ) {
             MyActivitiesTopBar()
 
+            OfflineBanner(
+                isOnline = uiState.isOnline,
+                message = offlineMessage(uiState.lastUpdated)
+            )
+
             MyActivitiesTabRow(
                 selectedTab = uiState.selectedTab,
                 onTabSelected = viewModel::selectTab
             )
+
+            if (uiState.selectedTab == ActivityTab.ALL && uiState.availableTags.isNotEmpty()) {
+                TagFilterRow(
+                    tags = uiState.availableTags,
+                    selectedTags = uiState.selectedTags,
+                    onTagToggled = viewModel::toggleTag,
+                    onClear = viewModel::clearTags
+                )
+            }
 
             when {
                 uiState.isLoading -> {
@@ -107,7 +127,10 @@ fun MyActivitiesScreen(
                     }
                 }
                 uiState.filteredActivities.isEmpty() -> {
-                    EmptyActivitiesMessage(tab = uiState.selectedTab)
+                    EmptyActivitiesMessage(
+                        tab = uiState.selectedTab,
+                        nothingSaved = !uiState.isOnline && uiState.allActivities.isEmpty()
+                    )
                 }
                 else -> {
                     LazyColumn(
@@ -118,6 +141,8 @@ fun MyActivitiesScreen(
                             ActivityCard(
                                 activity = activity,
                                 distanceKm = uiState.distancesKm[activity.id],
+                                isPending = activity.id in uiState.pendingIds,
+                                showVisibility = uiState.selectedTab == ActivityTab.CREATED,
                                 onClick = { onActivitySelected(activity.id) },
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
@@ -140,7 +165,7 @@ private fun MyActivitiesTopBar() {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "My Activities",
+            text = "Activities",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
@@ -158,9 +183,10 @@ private fun MyActivitiesTabRow(selectedTab: ActivityTab, onTabSelected: (Activit
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         listOf(
+            ActivityTab.ALL to "All",
             ActivityTab.FOR_YOU to "For You",
             ActivityTab.LIKED to "Liked",
-            ActivityTab.PRIVATE to "Private"
+            ActivityTab.CREATED to "Created"
         ).forEach { (tab, label) ->
             ActivityTabPill(
                 label = label,
@@ -202,17 +228,65 @@ private fun ActivityTabPill(
 }
 
 
-private fun emptyStateMessage(tab: ActivityTab): String = when (tab) {
-    ActivityTab.FOR_YOU -> "No public activities yet."
-    ActivityTab.LIKED -> "No liked activities yet."
-    ActivityTab.PRIVATE -> "No private activities yet."
+@Composable
+private fun TagFilterRow(
+    tags: List<String>,
+    selectedTags: Set<String>,
+    onTagToggled: (String) -> Unit,
+    onClear: () -> Unit
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            TagChip(label = "All tags", isSelected = selectedTags.isEmpty(), onClick = onClear)
+        }
+        items(tags) { tag ->
+            TagChip(label = tag, isSelected = tag in selectedTags, onClick = { onTagToggled(tag) })
+        }
+    }
 }
 
 @Composable
-private fun EmptyActivitiesMessage(tab: ActivityTab) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+private fun TagChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (isSelected) Coral.copy(alpha = 0.15f) else Color.White)
+            .border(1.dp, if (isSelected) Coral else Color(0xFFDDDDDD), RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+    ) {
         Text(
-            text = emptyStateMessage(tab),
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) Coral else Color(0xFF666666)
+        )
+    }
+}
+
+private fun emptyStateMessage(tab: ActivityTab): String = when (tab) {
+    ActivityTab.ALL -> "No activities match these tags."
+    ActivityTab.FOR_YOU -> "No recommendations yet. Like a few activities and we'll suggest ones you'll enjoy."
+    ActivityTab.LIKED -> "No liked activities yet."
+    ActivityTab.CREATED -> "You haven't created any activities yet."
+}
+
+@Composable
+private fun EmptyActivitiesMessage(tab: ActivityTab, nothingSaved: Boolean) {
+    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        Text(
+            text = if (nothingSaved) {
+                "No activities saved on your phone yet. Connect to the internet to load them."
+            } else {
+                emptyStateMessage(tab)
+            },
+            textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium,
             color = Color(0xFF888888)
         )
@@ -225,7 +299,9 @@ fun ActivityCard(
     activity: Activity,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    distanceKm: Float? = null
+    distanceKm: Float? = null,
+    isPending: Boolean = false,
+    showVisibility: Boolean = false
 ) {
     Card(
         onClick = onClick,
@@ -250,18 +326,19 @@ fun ActivityCard(
                 contentAlignment = Alignment.Center
             ) {
                 if (activity.photoUrl.isNotBlank()) {
-                    AsyncImage(
-                        model = activity.photoUrl,
+                    CachedImage(
+                        url = activity.photoUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
+                        placeholder = painterResource(R.drawable.activity_placeholder),
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Icon(
-                        imageVector = Icons.Filled.Image,
+                    Image(
+                        painter = painterResource(R.drawable.activity_placeholder),
                         contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(28.dp)
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
@@ -294,6 +371,10 @@ fun ActivityCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFF888888)
                 )
+                if (showVisibility) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    VisibilityLabel(activity.visibility)
+                }
                 distanceKm?.let {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -303,8 +384,45 @@ fun ActivityCard(
                         color = Coral
                     )
                 }
+                if (isPending) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Waiting to upload",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF888888)
+                    )
+                }
             }
         }
+    }
+}
+
+
+@Composable
+private fun VisibilityLabel(visibility: ActivityVisibility) {
+    val isPublic = visibility == ActivityVisibility.PUBLIC
+    val color = if (isPublic) Coral else Color(0xFF666666)
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.12f))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (isPublic) Icons.Filled.Public else Icons.Filled.Lock,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(12.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = if (isPublic) "Public" else "Private",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
     }
 }
 
@@ -317,7 +435,7 @@ private data class MyActivitiesNavItem(
 private val myActivitiesNavItems = listOf(
     MyActivitiesNavItem("Explore", Icons.Filled.Explore),
     MyActivitiesNavItem("My Plans", Icons.Filled.CalendarMonth),
-    MyActivitiesNavItem("My Activities", Icons.Filled.Checklist),
+    MyActivitiesNavItem("Activities", Icons.Filled.Checklist),
     MyActivitiesNavItem("My Crew", Icons.Filled.Groups),
     MyActivitiesNavItem("My Profile", Icons.Filled.Person)
 )
@@ -354,4 +472,15 @@ private fun MyActivitiesBottomBar(
             )
         }
     }
+}
+
+private fun offlineMessage(lastUpdated: Long?): String {
+    val now = System.currentTimeMillis()
+    val saved = when {
+        lastUpdated == null -> "saved on your phone"
+        now - lastUpdated < DateUtils.MINUTE_IN_MILLIS -> "saved on your phone just now"
+        else -> "saved on your phone " +
+            DateUtils.getRelativeTimeSpanString(lastUpdated, now, DateUtils.MINUTE_IN_MILLIS).toString().lowercase()
+    }
+    return "You're offline. Showing activities $saved, new ones will upload when you reconnect."
 }

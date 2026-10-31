@@ -52,6 +52,11 @@ fun GroupInvitesScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            OfflineBanner(
+                isOnline = uiState.isOnline,
+                message = "You're offline — accepting group invites while offline is not supported yet"
+            )
+
             if (uiState.actionError != null) {
                 Text(
                     text = uiState.actionError!!,
@@ -67,6 +72,8 @@ fun GroupInvitesScreen(
                         CircularProgressIndicator(color = Coral, modifier = Modifier.align(Alignment.Center))
                     }
                     uiState.errorMessage != null -> CrewErrorMessage(message = uiState.errorMessage!!)
+                    uiState.invites.isEmpty() && !uiState.isOnline ->
+                        EmptyCrewMessage(message = "Group invites are not available offline.")
                     uiState.invites.isEmpty() -> EmptyCrewMessage(message = "No group invites.")
                     else -> {
                         LazyColumn(contentPadding = PaddingValues(vertical = 24.dp)) {
@@ -76,6 +83,7 @@ fun GroupInvitesScreen(
                                     memberIds = uiState.memberIdsByGroup[group.id].orEmpty(),
                                     groupMembers = uiState.groupMembers,
                                     isSaving = uiState.isSaving,
+                                    isOnline = uiState.isOnline,
                                     onJoin = { viewModel.join(group.id) },
                                     onDeny = { viewModel.deny(group.id) }
                                 )
@@ -94,6 +102,7 @@ private fun GroupInviteCard(
     memberIds: List<String>,
     groupMembers: Map<String, User>,
     isSaving: Boolean,
+    isOnline: Boolean,
     onJoin: () -> Unit,
     onDeny: () -> Unit
 ) {
@@ -121,7 +130,7 @@ private fun GroupInviteCard(
             Spacer(modifier = Modifier.height(12.dp))
             CrewDecisionButtons(
                 acceptLabel = "Join",
-                enabled = !isSaving,
+                enabled = !isSaving && isOnline,
                 onAccept = onJoin,
                 onDeny = onDeny
             )

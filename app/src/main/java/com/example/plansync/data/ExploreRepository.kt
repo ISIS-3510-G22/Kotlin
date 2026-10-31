@@ -5,18 +5,31 @@ import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
 import com.google.firebase.firestore.FieldPath
+import com.google.firebase.firestore.Source
+import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.tasks.await
 
 class ExploreRepository(
-    private val db: FirebaseFirestore = FirebaseProvider.firestore
+    private val db: FirebaseFirestore = FirebaseProvider.firestore,
+    private val storage: LocalStorageProvider = LocalStorageProvider
 ) {
+
+    private val cacheFile = "explore_plans.json"
+
+    suspend fun getCachedPlans(): List<Plan> =
+        runCatching { storage.read(cacheFile).toJsonList { it.toPlan() } }.getOrDefault(emptyList())
+
+    suspend fun cachePlans(plans: List<Plan>) {
+        storage.write(cacheFile, plans.toJsonString { it.toJson() })
+    }
 
     suspend fun getPlans(): Result<List<Plan>> = runCatching {
         val docs = db.collection("plans")
             .whereEqualTo("isPublic", true)
-            .get()
+            .get(Source.SERVER)
             .await()
             .documents
         val activityIdsByPlan = docs.associate { doc ->
@@ -52,10 +65,36 @@ class ExploreRepository(
             runCatching {
                 db.collection("activities")
                     .whereIn(FieldPath.documentId(), chunk)
-                    .get()
+                    .get(Source.SERVER)
                     .await()
                     .documents
                     .map { it.id to (it.getDouble("expectedPrice") ?: 0.0).toInt() }
             }.getOrDefault(emptyList())
         }.toMap()
+
+    private fun Plan.toJson(): JSONObject = JSONObject()
+        .put("id", id)
+        .put("title", title)
+        .put("date", date)
+        .put("estimatedCostPerPerson", estimatedCostPerPerson)
+        .put("participantIds", JSONArray(participants.map { it.id }))
+        .put("category", category)
+        .put("planType", planType)
+        .put("activityIds", JSONArray(activityIds))
+        .put("tags", JSONArray(tags))
+
+    private fun JSONObject.toPlan(): Plan = Plan(
+        id = getString("id"),
+        title = getString("title"),
+        date = getString("date"),
+        estimatedCostPerPerson = getInt("estimatedCostPerPerson"),
+        participants = getJSONArray("participantIds").toStringList()
+            .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i % 5) },
+        activities = emptyList(),
+        status = PlanStatus.CONFIRMED,
+        category = getString("category"),
+        planType = getString("planType"),
+        activityIds = getJSONArray("activityIds").toStringList(),
+        tags = getJSONArray("tags").toStringList()
+    )
 }

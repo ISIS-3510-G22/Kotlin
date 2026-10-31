@@ -22,6 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,11 +35,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -70,15 +78,27 @@ fun InviteScreen(
     onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(planId) {
         viewModel.loadContacts(planId)
     }
 
+    LaunchedEffect(uiState.errorMessage) {
+        if (uiState.errorMessage != null) {
+            snackbarHostState.showSnackbar(uiState.errorMessage!!)
+            viewModel.onErrorShown()
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = Color(0xFFF5F5F5)
+    ) { innerPadding ->
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F5F5))
+            .padding(innerPadding)
     ) {
 
         // ── Top bar ────────────────────────────────────────────────────────
@@ -109,6 +129,11 @@ fun InviteScreen(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
+        }
+
+        OfflineBanner(isOnline = uiState.isOnline, message = "You're offline — invites will sync when reconnected")
+        if (uiState.pendingSync) {
+            OfflineBanner(isOnline = false, message = "Invite queued — will be sent when back online")
         }
 
         HorizontalDivider(color = Color(0xFFEEEEEE))
@@ -143,6 +168,17 @@ fun InviteScreen(
                     CircularProgressIndicator()
                 }
             }
+            uiState.neverCached -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "You're offline and no contacts are cached yet.\nConnect to load your friends list.",
+                        color = Color(0xFF888888),
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    )
+                }
+            }
             else -> {
                 LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
@@ -171,6 +207,7 @@ fun InviteScreen(
             }
         }
     }
+    } // Scaffold
 
     // ── Invite confirmation dialog ─────────────────────────────────────────
     uiState.pendingInviteContact?.let { contact ->
@@ -203,7 +240,7 @@ private fun ContactRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Avatar with initials
+        // Avatar — photo via Coil with explicit cache keys; initials as fallback
         Box(
             modifier = Modifier
                 .size(48.dp)
@@ -212,12 +249,26 @@ private fun ContactRow(
                 .background(Color(0xFFF5F5F5)),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = contact.initials,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF333333)
-            )
+            if (contact.photoUrl.isNotBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(contact.photoUrl)
+                        .memoryCacheKey(contact.photoUrl)
+                        .diskCacheKey(contact.photoUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text(
+                    text = contact.initials,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF333333)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))

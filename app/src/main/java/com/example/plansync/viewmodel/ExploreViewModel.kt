@@ -1,18 +1,21 @@
 package com.example.plansync.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.ExploreRepository
 import com.example.plansync.model.Plan
+import com.example.plansync.service.NetworkMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class ExploreViewModel(
-    private val repository: ExploreRepository = ExploreRepository()
-) : ViewModel() {
+class ExploreViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = ExploreRepository()
+    private val networkMonitor = NetworkMonitor.get(application)
 
     data class UiState(
         val searchQuery: String = "",
@@ -25,30 +28,50 @@ class ExploreViewModel(
         val plans: List<Plan> = emptyList(),
         val filteredPlans: List<Plan> = emptyList(),
         val isLoading: Boolean = false,
+        val isOnline: Boolean = true,
         val errorMessage: String? = null
     )
 
-    private val _uiState = MutableStateFlow(UiState())
+    private val _uiState = MutableStateFlow(UiState(isOnline = networkMonitor.isCurrentlyOnline()))
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            networkMonitor.isOnline.collect { online ->
+                val reconnected = online && !_uiState.value.isOnline
+                _uiState.update { it.copy(isOnline = online) }
+                if (reconnected) loadPlans()
+            }
+        }
+    }
 
     fun loadPlans() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            val cached = repository.getCachedPlans()
+            _uiState.update { it.copy(isLoading = cached.isEmpty(), errorMessage = null) }
+            if (cached.isNotEmpty()) showPlans(cached)
 
-            repository.getPlans()
-                .onSuccess { plans ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            plans = plans,
-                            categoryOptions = listOf("All") + plans.flatMap { plan -> plan.tags }.distinct().sorted(),
-                            filteredPlans = filterPlans(plans, it)
-                        )
+            if (_uiState.value.isOnline) {
+                repository.getPlans()
+                    .onSuccess { plans ->
+                        repository.cachePlans(plans)
+                        showPlans(plans)
                     }
-                }
-                .onFailure { error ->
-                    _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
-                }
+                    .onFailure { error ->
+                        if (cached.isEmpty()) _uiState.update { it.copy(errorMessage = error.message) }
+                    }
+            }
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+
+    private fun showPlans(plans: List<Plan>) {
+        _uiState.update {
+            it.copy(
+                plans = plans,
+                categoryOptions = listOf("All") + plans.flatMap { plan -> plan.tags }.filter { tag -> tag.isNotBlank() }.distinct().sorted(),
+                filteredPlans = filterPlans(plans, it)
+            )
         }
     }
 
