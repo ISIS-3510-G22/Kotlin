@@ -51,6 +51,26 @@ fun FriendRequestsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            OfflineBanner(isOnline = uiState.isOnline, message = "You're offline — answers will be sent when reconnected")
+
+            if (uiState.queueError != null) {
+                Text(
+                    text = uiState.queueError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
+            if (uiState.savedError != null) {
+                Text(
+                    text = uiState.savedError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
             if (uiState.actionError != null) {
                 Text(
                     text = uiState.actionError!!,
