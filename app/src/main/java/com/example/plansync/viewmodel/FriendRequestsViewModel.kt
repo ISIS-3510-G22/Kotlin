@@ -9,6 +9,7 @@ import com.example.plansync.data.FriendRequestSnapshotRepository
 import com.example.plansync.model.FriendRequest
 import com.example.plansync.model.PendingFriendAnswer
 import com.example.plansync.service.NetworkMonitor
+import com.example.plansync.service.OfflineSyncService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,7 +87,10 @@ class FriendRequestsViewModel(application: Application) : AndroidViewModel(appli
 
             if (!networkMonitor.isCurrentlyOnline()) {
                 queueRepository.add(PendingFriendAnswer(request.id, status))
-                    .onSuccess { removeRequest(request.id) }
+                    .onSuccess {
+                        OfflineSyncService.notifyQueued(if (status == "accepted") "Your friend request acceptance" else "Your friend request decline")
+                        removeRequest(request.id)
+                    }
                     .onFailure { error -> _uiState.update { it.copy(actionError = error.message) } }
             } else {
                 val result = withTimeoutOrNull(8_000) {
@@ -98,7 +102,10 @@ class FriendRequestsViewModel(application: Application) : AndroidViewModel(appli
                 }
                 if (result == null) {
                     queueRepository.add(PendingFriendAnswer(request.id, status))
-                        .onSuccess { removeRequest(request.id) }
+                        .onSuccess {
+                            OfflineSyncService.notifyQueued(if (status == "accepted") "Your friend request acceptance" else "Your friend request decline")
+                            removeRequest(request.id)
+                        }
                         .onFailure { error -> _uiState.update { it.copy(actionError = error.message) } }
                 } else {
                     result
