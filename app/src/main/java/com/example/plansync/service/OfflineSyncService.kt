@@ -16,8 +16,13 @@ import com.example.plansync.model.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -37,16 +42,58 @@ object OfflineSyncService {
     private val _syncErrors = Channel<String>(Channel.BUFFERED)
     val syncErrors: Flow<String> = _syncErrors.receiveAsFlow()
 
+    private val _queuedNotices = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val queuedNotices: SharedFlow<String> = _queuedNotices
+
+    private val _queuedCount = MutableStateFlow(0)
+    val queuedCount: StateFlow<Int> = _queuedCount.asStateFlow()
+
+    private val _isOnline = MutableStateFlow(true)
+    val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
+
     fun start(context: Context, scope: CoroutineScope) {
         appContext = context.applicationContext
         locationService = LocationService(context.applicationContext)
         scope.launch {
-            NetworkMonitor.get(context).isOnline.filter { it }.collect { syncNow() }
+            _queuedCount.value = pendingActions.getAll().size
+            val nm = NetworkMonitor.get(context)
+            _isOnline.value = nm.isCurrentlyOnline()
+            nm.isOnline.collect { online ->
+                _isOnline.value = online
+                if (online) {
+                    syncNow()
+                    _queuedCount.value = pendingActions.getAll().size
+                }
+            }
         }
     }
 
-    suspend fun saveActivityOffline(action: PendingAction.SaveActivity) {
+    fun notifyQueued(label: String) {
+        _queuedCount.update { it + 1 }
+        _queuedNotices.tryEmit("$label has been queued and will be sent when you're back online.")
+    }
+
+    private suspend fun queue(action: PendingAction) {
         pendingActions.add(action)
+        if (!NetworkMonitor.get(appContext).isCurrentlyOnline()) {
+            notifyQueued(queuedLabel(action))
+        }
+    }
+
+    private fun queuedLabel(action: PendingAction): String = when (action) {
+        is PendingAction.CreatePlan          -> "Your plan \"${action.name}\""
+        is PendingAction.SaveActivity        -> "Your activity \"${action.name}\""
+        is PendingAction.SetLiked            -> if (action.liked) "Your like" else "Your unlike"
+        is PendingAction.DeleteActivity      -> "Your activity deletion"
+        is PendingAction.UpdateProfile       -> "Your profile update"
+        is PendingAction.AddPaymentMethod    -> "Your new payment method"
+        is PendingAction.DeletePaymentMethod -> "Your payment method removal"
+        is PendingAction.SetRsvp             -> "Your RSVP"
+        is PendingAction.SendInvite          -> "Your invite"
+    }
+
+    suspend fun saveActivityOffline(action: PendingAction.SaveActivity) {
+        queue(action)
         val existing = activityRepository.getCachedActivity(action.activityId)
         activityRepository.cacheActivity(
             Activity(
@@ -69,7 +116,7 @@ object OfflineSyncService {
     }
 
     suspend fun setLikedOffline(activity: Activity, liked: Boolean): Activity {
-        pendingActions.add(PendingAction.SetLiked(activity.id, liked))
+        queue(PendingAction.SetLiked(activity.id, liked))
         val updated = activity.withLike(liked)
         activityRepository.cacheActivity(updated)
         return updated
@@ -82,15 +129,15 @@ object OfflineSyncService {
         }
         val neverUploaded = related.any { it is PendingAction.SaveActivity && it.isNew }
         related.forEach { pendingActions.remove(it.id) }
-        if (!neverUploaded) pendingActions.add(PendingAction.DeleteActivity(activity.id, activity.photoUrl))
+        if (!neverUploaded) queue(PendingAction.DeleteActivity(activity.id, activity.photoUrl))
         activityRepository.removeCachedActivity(activity.id)
     }
 
     suspend fun createPlanOffline(action: PendingAction.CreatePlan) {
-        pendingActions.add(action)
+        queue(action)
     }
 
-    suspend fun enqueue(action: PendingAction) = pendingActions.add(action)
+    suspend fun enqueue(action: PendingAction) = queue(action)
 
     suspend fun hasPendingActions(): Boolean = pendingActions.getAll().isNotEmpty()
 
@@ -139,7 +186,6 @@ object OfflineSyncService {
                 _syncErrors.trySend("Sync failed: ${actionLabel(action)} was rejected by the server.")
                 pendingActions.remove(action.id)
             } else {
-                // Went offline mid-sync; stop and retry on next reconnect
                 break
             }
         }
