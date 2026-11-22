@@ -234,6 +234,7 @@ private fun ContactRow(
     contact: Contact,
     onInviteTapped: () -> Unit
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -250,13 +251,19 @@ private fun ContactRow(
             contentAlignment = Alignment.Center
         ) {
             if (contact.photoUrl.isNotBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
+                val imageRequest = run {
+                    android.os.Trace.beginSection("ContactRow.buildImageRequest")
+                    val r = ImageRequest.Builder(context)
                         .data(contact.photoUrl)
                         .memoryCacheKey(contact.photoUrl)
                         .diskCacheKey(contact.photoUrl)
                         .crossfade(true)
-                        .build(),
+                        .build()
+                    android.os.Trace.endSection()
+                    r
+                }
+                AsyncImage(
+                    model = imageRequest,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

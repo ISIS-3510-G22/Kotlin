@@ -97,6 +97,12 @@ fun CreatePlanScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    android.os.Trace.beginSection("CreatePlan.recommendedFilter")
+    val recommended = uiState.recommendedActivities.filter { rec ->
+        uiState.selectedActivities.none { it.id == rec.id }
+    }
+    android.os.Trace.endSection()
+
     LaunchedEffect(preselectedActivityId) {
         if (preselectedActivityId != null) viewModel.preSelectActivity(preselectedActivityId)
     }
@@ -414,9 +420,6 @@ fun CreatePlanScreen(
                 }
             }
 
-            val recommended = uiState.recommendedActivities.filter { rec ->
-                uiState.selectedActivities.none { it.id == rec.id }
-            }
             if (recommended.isNotEmpty()) {
                 item {
                     FormSectionLabel("RECOMMENDED FOR YOU")
