@@ -28,6 +28,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.example.plansync.ui.ActivityDetailScreen
 import com.example.plansync.ui.AddFriendScreen
+import com.example.plansync.ui.MyDraftsScreen
 import com.example.plansync.ui.AddPaymentMethodScreen
 import com.example.plansync.ui.AddToPlanScreen
 import com.example.plansync.ui.CreateActivityScreen
@@ -56,15 +57,17 @@ object Routes {
     const val MY_PLANS    = "my_plans"
     const val PLAN_DETAIL = "plan_detail/{planId}"
     const val INVITE      = "invite/{planId}"
-    const val CREATE_PLAN = "create_plan?activityId={activityId}&origin={origin}&sourceId={sourceId}"
-    fun createPlan(activityId: String? = null, origin: String? = null, sourceId: String? = null): String {
+    const val CREATE_PLAN = "create_plan?activityId={activityId}&origin={origin}&sourceId={sourceId}&draftId={draftId}"
+    fun createPlan(activityId: String? = null, origin: String? = null, sourceId: String? = null, draftId: String? = null): String {
         val params = listOfNotNull(
             activityId?.let { "activityId=$it" },
             origin?.let     { "origin=$it" },
-            sourceId?.let   { "sourceId=$it" }
+            sourceId?.let   { "sourceId=$it" },
+            draftId?.let    { "draftId=$it" }
         )
         return if (params.isEmpty()) "create_plan" else "create_plan?${params.joinToString("&")}"
     }
+    const val MY_DRAFTS = "my_drafts"
     const val ACTIVITIES  = "activities"
     const val GROUPS      = "groups"
     const val PROFILE     = "profile"
@@ -239,18 +242,29 @@ fun MainNavHost(
             arguments = listOf(
                 navArgument("activityId") { type = NavType.StringType; nullable = true; defaultValue = null },
                 navArgument("origin")     { type = NavType.StringType; nullable = true; defaultValue = null },
-                navArgument("sourceId")   { type = NavType.StringType; nullable = true; defaultValue = null }
+                navArgument("sourceId")   { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("draftId")    { type = NavType.StringType; nullable = true; defaultValue = null }
             )
         ) { backStackEntry ->
             val activityId = backStackEntry.arguments?.getString("activityId")
             val origin     = backStackEntry.arguments?.getString("origin")
             val sourceId   = backStackEntry.arguments?.getString("sourceId")
+            val draftId    = backStackEntry.arguments?.getString("draftId")
             CreatePlanScreen(
                 preselectedActivityId = activityId,
                 origin                = origin,
                 sourceId              = sourceId,
-                onBack  = { navController.popBackStack() },
-                onSaved = { navController.popBackStack() }
+                draftId               = draftId,
+                onBack    = { navController.popBackStack() },
+                onSaved   = { navController.popBackStack() },
+                onDrafts  = { navController.navigate(Routes.MY_DRAFTS) }
+            )
+        }
+
+        composable(Routes.MY_DRAFTS) {
+            MyDraftsScreen(
+                onBack   = { navController.popBackStack() },
+                onResume = { draftId -> navController.navigate(Routes.createPlan(draftId = draftId)) }
             )
         }
 

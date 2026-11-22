@@ -1,22 +1,13 @@
 package com.example.plansync.data
 
-import android.content.Context
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.longPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.first
+// Persists partially-filled Create Plan forms so users can resume after abandoning.
+// Backed by Room (DraftDatabase) — replaces the previous single-draft DataStore.
+class PlanDraftRepository {
 
-private val Context.planDraftStore by preferencesDataStore(name = "plan_draft")
-
-// Persists a partially filled Create Plan form so the user can resume after leaving the screen.
-class PlanDraftRepository(private val context: Context) {
-
-    private val store get() = context.planDraftStore
+    private val dao = DraftDatabase.dao
 
     data class Draft(
+        val id: String,
         val planName: String,
         val selectedDateMillis: Long?,
         val selectedHour: Int,
@@ -26,55 +17,50 @@ class PlanDraftRepository(private val context: Context) {
         val isPublic: Boolean,
         val selectedActivityIds: List<String>,
         val origin: String?,
-        val sourceId: String?
+        val sourceId: String?,
+        val lastStep: Int,
+        val updatedAt: Long = System.currentTimeMillis()
     )
 
-    suspend fun load(): Draft {
-        val prefs = store.data.first()
-        return Draft(
-            planName           = prefs[KEY_NAME].orEmpty(),
-            selectedDateMillis = prefs[KEY_DATE]?.takeIf { it > 0 },
-            selectedHour       = prefs[KEY_HOUR] ?: 10,
-            selectedMinute     = prefs[KEY_MINUTE] ?: 0,
-            locationText       = prefs[KEY_LOCATION].orEmpty(),
-            participantCount   = prefs[KEY_COUNT] ?: 1,
-            isPublic           = prefs[KEY_PUBLIC] ?: false,
-            selectedActivityIds = prefs[KEY_ACTIVITY_IDS].orEmpty()
-                .split(",").filter { it.isNotBlank() },
-            origin             = prefs[KEY_ORIGIN],
-            sourceId           = prefs[KEY_SOURCE_ID]
-        )
-    }
+    suspend fun getAll(): List<Draft> = dao.getAll().map { it.toDraft() }
 
-    suspend fun save(draft: Draft) {
-        store.edit { prefs ->
-            prefs[KEY_NAME]         = draft.planName
-            prefs[KEY_DATE]         = draft.selectedDateMillis ?: -1L
-            prefs[KEY_HOUR]         = draft.selectedHour
-            prefs[KEY_MINUTE]       = draft.selectedMinute
-            prefs[KEY_LOCATION]     = draft.locationText
-            prefs[KEY_COUNT]        = draft.participantCount
-            prefs[KEY_PUBLIC]       = draft.isPublic
-            prefs[KEY_ACTIVITY_IDS] = draft.selectedActivityIds.joinToString(",")
-            prefs[KEY_ORIGIN]       = draft.origin.orEmpty()
-            prefs[KEY_SOURCE_ID]    = draft.sourceId.orEmpty()
-        }
-    }
+    suspend fun loadById(id: String): Draft? = dao.getById(id)?.toDraft()
 
-    suspend fun clear() {
-        store.edit { it.clear() }
-    }
+    suspend fun loadLatest(): Draft? = dao.getLatest()?.toDraft()
 
-    private companion object {
-        val KEY_NAME         = stringPreferencesKey("name")
-        val KEY_DATE         = longPreferencesKey("date")
-        val KEY_HOUR         = intPreferencesKey("hour")
-        val KEY_MINUTE       = intPreferencesKey("minute")
-        val KEY_LOCATION     = stringPreferencesKey("location")
-        val KEY_COUNT        = intPreferencesKey("count")
-        val KEY_PUBLIC       = booleanPreferencesKey("public")
-        val KEY_ACTIVITY_IDS = stringPreferencesKey("activity_ids")
-        val KEY_ORIGIN       = stringPreferencesKey("origin")
-        val KEY_SOURCE_ID    = stringPreferencesKey("source_id")
-    }
+    suspend fun save(draft: Draft) = dao.upsert(draft.toEntity())
+
+    suspend fun delete(id: String) = dao.delete(id)
+
+    private fun DraftEntity.toDraft() = Draft(
+        id                  = id,
+        planName            = planName,
+        selectedDateMillis  = selectedDateMillis.takeIf { it > 0 },
+        selectedHour        = selectedHour,
+        selectedMinute      = selectedMinute,
+        locationText        = locationText,
+        participantCount    = participantCount,
+        isPublic            = isPublic,
+        selectedActivityIds = activityIds.split(",").filter { it.isNotBlank() },
+        origin              = origin.ifBlank { null },
+        sourceId            = sourceId.ifBlank { null },
+        lastStep            = lastStep,
+        updatedAt           = updatedAt
+    )
+
+    private fun Draft.toEntity() = DraftEntity(
+        id                 = id,
+        planName           = planName,
+        selectedDateMillis = selectedDateMillis ?: -1L,
+        selectedHour       = selectedHour,
+        selectedMinute     = selectedMinute,
+        locationText       = locationText,
+        participantCount   = participantCount,
+        isPublic           = isPublic,
+        activityIds        = selectedActivityIds.joinToString(","),
+        origin             = origin.orEmpty(),
+        sourceId           = sourceId.orEmpty(),
+        lastStep           = lastStep,
+        updatedAt          = updatedAt
+    )
 }

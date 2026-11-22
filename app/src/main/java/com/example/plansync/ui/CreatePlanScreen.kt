@@ -92,8 +92,10 @@ fun CreatePlanScreen(
     preselectedActivityId: String? = null,
     origin: String? = null,
     sourceId: String? = null,
+    draftId: String? = null,
     onBack: () -> Unit = {},
-    onSaved: () -> Unit = {}
+    onSaved: () -> Unit = {},
+    onDrafts: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -103,6 +105,10 @@ fun CreatePlanScreen(
 
     LaunchedEffect(origin, sourceId) {
         viewModel.setOrigin(origin, sourceId)
+    }
+
+    LaunchedEffect(draftId) {
+        if (draftId != null) viewModel.resumeDraft(draftId)
     }
 
     LaunchedEffect(uiState.isSaved) {
@@ -208,7 +214,7 @@ fun CreatePlanScreen(
         containerColor = Color(0xFFF5F5F5),
         topBar = {
             Column {
-                CreatePlanTopBar(onBack = onBack)
+                CreatePlanTopBar(onBack = onBack, onDrafts = onDrafts)
                 OfflineBanner(isOnline = uiState.isOnline, message = "You're offline — plan will save when reconnected")
             }
         },
@@ -546,7 +552,7 @@ private fun ActivityPickerDialog(
 // ── Top bar ────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun CreatePlanTopBar(onBack: () -> Unit) {
+private fun CreatePlanTopBar(onBack: () -> Unit, onDrafts: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -564,7 +570,10 @@ private fun CreatePlanTopBar(onBack: () -> Unit) {
             Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(12.dp))
-        Text("Create Plan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("Create Plan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        androidx.compose.material3.TextButton(onClick = onDrafts) {
+            Text("Drafts", color = Coral, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 
