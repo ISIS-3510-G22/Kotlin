@@ -56,6 +56,7 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -97,11 +98,11 @@ fun CreatePlanScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    android.os.Trace.beginSection("CreatePlan.recommendedFilter")
-    val recommended = uiState.recommendedActivities.filter { rec ->
-        uiState.selectedActivities.none { it.id == rec.id }
+    val recommended = remember(uiState.recommendedActivities, uiState.selectedActivities) {
+        uiState.recommendedActivities.filter { rec ->
+            uiState.selectedActivities.none { it.id == rec.id }
+        }
     }
-    android.os.Trace.endSection()
 
     LaunchedEffect(preselectedActivityId) {
         if (preselectedActivityId != null) viewModel.preSelectActivity(preselectedActivityId)

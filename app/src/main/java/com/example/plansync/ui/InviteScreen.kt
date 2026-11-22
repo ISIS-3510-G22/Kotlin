@@ -251,16 +251,13 @@ private fun ContactRow(
             contentAlignment = Alignment.Center
         ) {
             if (contact.photoUrl.isNotBlank()) {
-                val imageRequest = run {
-                    android.os.Trace.beginSection("ContactRow.buildImageRequest")
-                    val r = ImageRequest.Builder(context)
+                val imageRequest = remember(contact.photoUrl) {
+                    ImageRequest.Builder(context)
                         .data(contact.photoUrl)
                         .memoryCacheKey(contact.photoUrl)
                         .diskCacheKey(contact.photoUrl)
                         .crossfade(true)
                         .build()
-                    android.os.Trace.endSection()
-                    r
                 }
                 AsyncImage(
                     model = imageRequest,

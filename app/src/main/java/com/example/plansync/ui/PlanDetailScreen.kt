@@ -466,10 +466,12 @@ private fun ParticipantsSection(participants: List<Participant>, onInvite: () ->
 
 @Composable
 private fun ParticipantAvatar(participant: Participant) {
-    android.os.Trace.beginSection("ParticipantAvatar.colors")
-    val bgColor = avatarColors.getOrElse(participant.avatarColorIndex) { CoralLight }
-    val textColor = if (participant.avatarColorIndex <= 1) Color.White else Color(0xFF444444)
-    android.os.Trace.endSection()
+    val bgColor = remember(participant.avatarColorIndex) {
+        avatarColors.getOrElse(participant.avatarColorIndex) { CoralLight }
+    }
+    val textColor = remember(participant.avatarColorIndex) {
+        if (participant.avatarColorIndex <= 1) Color.White else Color(0xFF444444)
+    }
 
     Box(
         modifier = Modifier
