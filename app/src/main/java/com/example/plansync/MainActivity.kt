@@ -29,8 +29,9 @@ import com.example.plansync.ui.QueuedActionsBanner
 import com.example.plansync.ui.SignUpScreen
 import com.example.plansync.ui.navigation.MainNavHost
 import com.example.plansync.ui.theme.PlanSyncTheme
-import com.example.plansync.data.FirebaseProvider
 import com.example.plansync.data.ActivityDatabase
+import com.example.plansync.data.DraftDatabase
+import com.example.plansync.data.FirebaseProvider
 import com.example.plansync.data.LocalStorageProvider
 import com.example.plansync.service.OfflineSyncService
 import com.example.plansync.viewmodel.SyncStatusViewModel
@@ -65,6 +66,7 @@ class MainActivity : ComponentActivity() {
 
         LocalStorageProvider.init(this)
         ActivityDatabase.init(this)
+        DraftDatabase.init(this)
         OfflineSyncService.start(this, lifecycleScope)
 
         enableEdgeToEdge()
