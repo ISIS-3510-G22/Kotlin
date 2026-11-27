@@ -19,14 +19,16 @@ class SplitRepository(
 
     val currentUserId: String? get() = auth.currentUser?.uid
 
-    suspend fun getExpenses(planId: String): Result<List<Expense>> =
-        suspendCancellableCoroutine { continuation ->
+    suspend fun getExpenses(planId: String): Result<List<Expense>> {
+        SplitMemoryCache.getExpenses(planId)?.let { return Result.success(it) }
+        return suspendCancellableCoroutine<Result<List<Expense>>> { continuation ->
             plans.document(planId).collection("expenses").get()
                 .addOnSuccessListener { snapshot ->
                     continuation.resume(Result.success(snapshot.documents.map { it.toExpense() }))
                 }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-        }
+        }.onSuccess { SplitMemoryCache.putExpenses(planId, it) }
+    }
 
     suspend fun addExpense(
         planId: String,
@@ -47,7 +49,7 @@ class SplitRepository(
             )
         ).await()
         Unit
-    }
+    }.also { SplitMemoryCache.invalidate(planId) }
 
     suspend fun updateExpense(
         planId: String,
@@ -60,21 +62,23 @@ class SplitRepository(
             .update(mapOf("name" to name, "value" to firestoreNumber(value), "paidById" to paidById))
             .await()
         Unit
-    }
+    }.also { SplitMemoryCache.invalidate(planId) }
 
     suspend fun deleteExpense(planId: String, expenseId: String): Result<Unit> = runCatching {
         plans.document(planId).collection("expenses").document(expenseId).delete().await()
         Unit
-    }
+    }.also { SplitMemoryCache.invalidate(planId) }
 
-    suspend fun getSettlements(planId: String): Result<List<Settlement>> =
-        suspendCancellableCoroutine { continuation ->
+    suspend fun getSettlements(planId: String): Result<List<Settlement>> {
+        SplitMemoryCache.getSettlements(planId)?.let { return Result.success(it) }
+        return suspendCancellableCoroutine<Result<List<Settlement>>> { continuation ->
             plans.document(planId).collection("settlements").get()
                 .addOnSuccessListener { snapshot ->
                     continuation.resume(Result.success(snapshot.documents.map { it.toSettlement() }))
                 }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-        }
+        }.onSuccess { SplitMemoryCache.putSettlements(planId, it) }
+    }
 
     suspend fun addSettlement(planId: String, toId: String, amount: Double): Result<Unit> {
         val uid = auth.currentUser?.uid
@@ -86,11 +90,11 @@ class SplitRepository(
             "amount" to Math.round(amount * 100) / 100.0
         )
 
-        return suspendCancellableCoroutine { continuation ->
+        return suspendCancellableCoroutine<Result<Unit>> { continuation ->
             plans.document(planId).collection("settlements").add(data)
                 .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-        }
+        }.also { SplitMemoryCache.invalidate(planId) }
     }
 
     suspend fun deleteMySettlementsTo(planId: String, toId: String): Result<Unit> {
@@ -111,11 +115,11 @@ class SplitRepository(
             batch.delete(doc.reference)
         }
 
-        return suspendCancellableCoroutine { continuation ->
+        return suspendCancellableCoroutine<Result<Unit>> { continuation ->
             batch.commit()
                 .addOnSuccessListener { continuation.resume(Result.success(Unit)) }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
-        }
+        }.also { SplitMemoryCache.invalidate(planId) }
     }
 
     private fun DocumentSnapshot.toExpense() = Expense(
