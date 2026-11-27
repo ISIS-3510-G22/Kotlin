@@ -68,10 +68,16 @@ class SplitRepository(
         expenseId: String,
         name: String,
         value: Double,
-        paidById: String
+        paidById: String,
+        resetSplit: Boolean = false
     ): Result<Unit> = runCatching {
+        val fields = mutableMapOf<String, Any>("name" to name, "value" to firestoreNumber(value), "paidById" to paidById)
+        if (resetSplit) {
+            fields["splitMethod"] = "equal"
+            fields["customAmounts"] = emptyMap<String, Double>()
+        }
         plans.document(planId).collection("expenses").document(expenseId)
-            .update(mapOf("name" to name, "value" to firestoreNumber(value), "paidById" to paidById))
+            .update(fields)
             .await()
         Unit
     }.also { SplitMemoryCache.invalidate(planId) }

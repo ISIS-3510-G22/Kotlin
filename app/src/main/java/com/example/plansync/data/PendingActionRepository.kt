@@ -93,6 +93,7 @@ class PendingActionRepository(
                 .put("name", name)
                 .put("value", value)
                 .put("paidById", paidById)
+                .put("resetSplit", resetSplit)
             is PendingAction.DeleteExpense -> json
                 .put("type", "delete_expense")
                 .put("planId", planId)
@@ -192,6 +193,7 @@ class PendingActionRepository(
                 name = getString("name"),
                 value = getDouble("value"),
                 paidById = getString("paidById"),
+                resetSplit = optBoolean("resetSplit", false),
                 id = id
             )
             "delete_expense" -> PendingAction.DeleteExpense(

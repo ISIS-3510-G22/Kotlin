@@ -182,7 +182,8 @@ object OfflineSyncService {
                 }
                 is PendingAction.UpdateExpense -> if (action.planId == planId) {
                     result[action.expenseId]?.let {
-                        result[it.id] = it.copy(name = action.name, value = action.value, paidById = action.paidById)
+                        val updated = it.copy(name = action.name, value = action.value, paidById = action.paidById)
+                        result[it.id] = if (action.resetSplit) updated.copy(splitMethod = "equal", customAmounts = emptyMap()) else updated
                     }
                 }
                 is PendingAction.DeleteExpense -> if (action.planId == planId) result.remove(action.expenseId)
@@ -311,7 +312,7 @@ object OfflineSyncService {
             result.isSuccess
         }
         is PendingAction.UpdateExpense ->
-            splitRepository.updateExpense(action.planId, action.expenseId, action.name, action.value, action.paidById).isSuccess
+            splitRepository.updateExpense(action.planId, action.expenseId, action.name, action.value, action.paidById, action.resetSplit).isSuccess
         is PendingAction.DeleteExpense ->
             splitRepository.deleteExpense(action.planId, action.expenseId).isSuccess
         is PendingAction.AddSettlement ->
