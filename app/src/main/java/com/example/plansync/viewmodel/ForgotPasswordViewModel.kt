@@ -4,9 +4,13 @@ import android.app.Application
 import android.util.Patterns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.plansync.data.PasswordResetPreferencesRepository
 import com.example.plansync.data.PasswordResetQueueRepository
 import com.example.plansync.data.PasswordResetRepository
 import com.example.plansync.service.NetworkMonitor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,7 +25,11 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
 
     private val queueRepository = PasswordResetQueueRepository()
 
+    private val preferencesRepository = PasswordResetPreferencesRepository(application)
+
     private val networkMonitor = NetworkMonitor.get(application)
+
+    private var cooldownJob: Job? = null
 
     data class UiState(
         val email: String = "",
@@ -30,7 +38,8 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
         val successMessage: String? = null,
         val isOffline: Boolean = false,
         val pendingEmail: String? = null,
-        val infoMessage: String? = null
+        val infoMessage: String? = null,
+        val cooldownSeconds: Int = 0
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -66,6 +75,32 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
                 if (networkMonitor.isCurrentlyOnline()) flushPending()
             }
         }
+        viewModelScope.launch {
+            preferencesRepository.getLastSentAt().getOrNull()?.let { startCooldown(it) }
+        }
+    }
+
+    private fun startCooldown(lastSentAt: Long) {
+        cooldownJob?.cancel()
+        cooldownJob = viewModelScope.launch(Dispatchers.Default) {
+            while (true) {
+                val elapsed = (System.currentTimeMillis() - lastSentAt) / 1000
+                if (elapsed < 0 || elapsed >= COOLDOWN_SECONDS) {
+                    _uiState.update { it.copy(cooldownSeconds = 0) }
+                    break
+                }
+                _uiState.update { it.copy(cooldownSeconds = (COOLDOWN_SECONDS - elapsed).toInt()) }
+                delay(1000)
+            }
+        }
+    }
+
+    private fun registerSend() {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            preferencesRepository.saveLastSentAt(now)
+            startCooldown(now)
+        }
     }
 
     fun sendReset() {
@@ -76,6 +111,16 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
         }
         if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
             _uiState.update { it.copy(errorMessage = "Enter a valid email address.", successMessage = null) }
+            return
+        }
+        val secondsLeft = _uiState.value.cooldownSeconds
+        if (secondsLeft > 0) {
+            _uiState.update {
+                it.copy(
+                    errorMessage = "Please wait $secondsLeft seconds before asking for another link.",
+                    successMessage = null
+                )
+            }
             return
         }
         if (!networkMonitor.isCurrentlyOnline()) {
@@ -109,6 +154,7 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
 
             repository.sendResetEmail(email)
                 .onSuccess {
+                    registerSend()
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -133,6 +179,7 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
             repository.sendResetEmail(email)
                 .onSuccess {
                     queueRepository.clear()
+                    registerSend()
                     _uiState.update {
                         it.copy(
                             pendingEmail = null,
@@ -149,6 +196,7 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
     }
 
     private companion object {
+        const val COOLDOWN_SECONDS = 60
         const val OFFLINE_INFO =
             "You are offline. We saved your request and will send the link when you are back online. Keep the app open."
     }
