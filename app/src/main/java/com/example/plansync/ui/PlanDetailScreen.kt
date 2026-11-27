@@ -75,6 +75,7 @@ import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
+import com.example.plansync.model.PlanStatus
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.ui.theme.CoralLight
 import com.example.plansync.viewmodel.PlanDetailViewModel
@@ -97,7 +98,8 @@ fun PlanDetailScreen(
     viewModel: PlanDetailViewModel = viewModel(),
     onBack: () -> Unit = {},
     onInvite: (String) -> Unit = {},
-    onAddActivity: () -> Unit = {}
+    onAddActivity: () -> Unit = {},
+    onExpenses: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -149,7 +151,8 @@ fun PlanDetailScreen(
                         plan = uiState.plan!!,
                         onInvite = { onInvite(planId) },
                         onRsvp = { viewModel.onRsvpTriggered() },
-                        onAddActivity = onAddActivity
+                        onAddActivity = onAddActivity,
+                        onExpenses = { onExpenses(planId) }
                     )
                 }
                 uiState.errorMessage != null -> {
@@ -216,7 +219,13 @@ private fun PlanDetailTopBar(onBack: () -> Unit) {
 // ── Scrollable plan content ────────────────────────────────────────────────────
 
 @Composable
-private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () -> Unit = {}, onAddActivity: () -> Unit = {}) {
+private fun PlanDetailContent(
+    plan: Plan,
+    onInvite: () -> Unit = {},
+    onRsvp: () -> Unit = {},
+    onAddActivity: () -> Unit = {},
+    onExpenses: () -> Unit = {}
+) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
 
         // Header: title, date, cost, activity count, action buttons
@@ -231,7 +240,7 @@ private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () 
             )
         }
 
-        item { PlanHeader(plan = plan, onRsvp = onRsvp, onAddActivity = onAddActivity) }
+        item { PlanHeader(plan = plan, onRsvp = onRsvp, onAddActivity = onAddActivity, onExpenses = onExpenses) }
 
         item { HorizontalDivider(color = Color(0xFFDDDDDD), thickness = 1.dp) }
 
@@ -253,7 +262,12 @@ private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () 
 // ── Plan header ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () -> Unit = {}) {
+private fun PlanHeader(
+    plan: Plan,
+    onRsvp: () -> Unit = {},
+    onAddActivity: () -> Unit = {},
+    onExpenses: () -> Unit = {}
+) {
     val context = LocalContext.current
     // Context-aware: check if plan date matches today's date using device clock.
     val isToday = remember(plan.date) {
@@ -358,18 +372,27 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () ->
                     context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                 }
             )
-            ActionButton(
-                icon = Icons.Default.Add,
-                label = "Add Activity",
-                modifier = Modifier.weight(1f),
-                onClick = onAddActivity
-            )
-            ActionButton(
-                icon = Icons.Default.CheckCircle,
-                label = "RSVP",
-                modifier = Modifier.weight(1f),
-                onClick = onRsvp
-            )
+            if (plan.status == PlanStatus.PAST) {
+                ActionButton(
+                    icon = Icons.Default.AttachMoney,
+                    label = "Expenses",
+                    modifier = Modifier.weight(1f),
+                    onClick = onExpenses
+                )
+            } else {
+                ActionButton(
+                    icon = Icons.Default.Add,
+                    label = "Add Activity",
+                    modifier = Modifier.weight(1f),
+                    onClick = onAddActivity
+                )
+                ActionButton(
+                    icon = Icons.Default.CheckCircle,
+                    label = "RSVP",
+                    modifier = Modifier.weight(1f),
+                    onClick = onRsvp
+                )
+            }
         }
     }
 }

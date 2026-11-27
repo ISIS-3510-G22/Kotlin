@@ -74,6 +74,10 @@ class PlanRepository(
         }
     }
 
+    suspend fun getPlanDate(planId: String): Result<Date?> = runCatching {
+        db.collection("plans").document(planId).get().await().getTimestamp("date")?.toDate()
+    }
+
     suspend fun getPlan(planId: String): Result<Plan> {
         // IO: force server fetch, skip Firestore's local cache; 8s timeout then fall back to Room
         val planDoc: DocumentSnapshot? = try {
