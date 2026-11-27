@@ -8,6 +8,7 @@ import com.example.plansync.data.CrewRepository
 import com.example.plansync.data.PlanDatabase
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.SplitRepository
+import com.example.plansync.model.Expense
 import com.example.plansync.model.PendingAction
 import com.example.plansync.service.OfflineSyncService
 import java.util.UUID
@@ -45,6 +46,7 @@ class ExpenseFormViewModel(application: Application) : AndroidViewModel(applicat
     private var planId = ""
     private var expenseId: String? = null
     private var splitAmongIds: List<String> = emptyList()
+    private var original: Expense? = null
     private var loaded = false
 
     init {
@@ -75,6 +77,7 @@ class ExpenseFormViewModel(application: Application) : AndroidViewModel(applicat
             }
 
             val participantIds = plan.participants.map { it.id }
+            original = expense
             splitAmongIds = expense?.splitAmongIds ?: participantIds
             val ids = (participantIds + splitAmongIds + listOfNotNull(expense?.paidById)).distinct()
             val people = crewRepository.getUsersByIds(ids)
@@ -124,12 +127,13 @@ class ExpenseFormViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, errorMessage = null) }
             val id = expenseId
+            val resetSplit = original?.let { it.splitMethod == "custom" && it.value != value } ?: false
 
             if (!OfflineSyncService.isOnlineNow()) {
                 val action = if (id == null) {
                     PendingAction.AddExpense(planId, UUID.randomUUID().toString(), name, value, paidById, splitAmongIds, System.currentTimeMillis())
                 } else {
-                    PendingAction.UpdateExpense(planId, id, name, value, paidById)
+                    PendingAction.UpdateExpense(planId, id, name, value, paidById, resetSplit)
                 }
                 OfflineSyncService.enqueue(action)
                 _uiState.update { it.copy(isSaving = false, isDone = true) }
@@ -139,7 +143,7 @@ class ExpenseFormViewModel(application: Application) : AndroidViewModel(applicat
             val result = if (id == null) {
                 splitRepository.addExpense(planId, UUID.randomUUID().toString(), name, value, paidById, splitAmongIds)
             } else {
-                splitRepository.updateExpense(planId, id, name, value, paidById)
+                splitRepository.updateExpense(planId, id, name, value, paidById, resetSplit)
             }
             result
                 .onSuccess {

@@ -92,6 +92,7 @@ sealed class PendingAction {
         val name: String,
         val value: Double,
         val paidById: String,
+        val resetSplit: Boolean = false,
         override val id: String = UUID.randomUUID().toString()
     ) : PendingAction()
 
