@@ -7,6 +7,7 @@ import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.PlanSnapshotRepository
 import com.example.plansync.data.ReviewQueueRepository
 import com.example.plansync.data.ReviewRepository
+import com.example.plansync.data.SplitRepository
 import com.example.plansync.data.WeatherRepository
 import com.example.plansync.model.PendingAction
 import com.example.plansync.model.Plan
@@ -14,7 +15,10 @@ import com.example.plansync.model.PlanStatus
 import com.example.plansync.model.RsvpStatus
 import com.example.plansync.service.NetworkMonitor
 import com.example.plansync.service.OfflineSyncService
+import com.example.plansync.service.SplitCalculator
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +34,7 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
     private val reviewRepository = ReviewRepository()
     private val snapshotRepository = PlanSnapshotRepository()
     private val reviewQueueRepository = ReviewQueueRepository()
+    private val splitRepository = SplitRepository()
     private val networkMonitor = NetworkMonitor.get(application)
 
     data class UiState(
@@ -48,7 +53,8 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
         val isOnline: Boolean = true,
         val showingSavedPlans: Boolean = false,
         val savedPlansError: String? = null,
-        val reviewQueueError: String? = null
+        val reviewQueueError: String? = null,
+        val overduePlanIds: Set<String> = emptySet()
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -114,6 +120,7 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
             }
             if (online) {
                 result.onSuccess { plans ->
+                    loadOverduePlans(plans)
                     snapshotRepository.savePlans(plans).onFailure { error ->
                         withContext(Dispatchers.Main) {
                             _uiState.update { it.copy(savedPlansError = error.message) }
@@ -137,6 +144,30 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
             }
             withContext(Dispatchers.Main) {
                 _uiState.update { it.copy(isLoading = false, filteredPlans = filtered) }
+            }
+        }
+    }
+
+    private fun loadOverduePlans(plans: List<Plan>) {
+        val myId = splitRepository.currentUserId ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val overdueIds = plans
+                .filter { it.status == PlanStatus.PAST && SplitCalculator.daysOverdue(it.dateTime) != null }
+                .map { plan ->
+                    async {
+                        val expenses = async { splitRepository.getExpenses(plan.id).getOrNull() }
+                        val settlements = async { splitRepository.getSettlements(plan.id).getOrNull() }
+                        val e = expenses.await() ?: return@async null
+                        val s = settlements.await() ?: return@async null
+                        val splits = SplitCalculator.buildSplits(myId, e, s) + SplitCalculator.buildOwedToMe(myId, e, s)
+                        plan.id.takeIf { splits.any { split -> !split.paid } }
+                    }
+                }
+                .awaitAll()
+                .filterNotNull()
+                .toSet()
+            withContext(Dispatchers.Main) {
+                _uiState.update { it.copy(overduePlanIds = overdueIds) }
             }
         }
     }

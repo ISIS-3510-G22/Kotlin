@@ -2,11 +2,13 @@ package com.example.plansync.data
 
 import com.example.plansync.model.Expense
 import com.example.plansync.model.Settlement
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.tasks.await
 
 class SplitRepository(
     private val db: FirebaseFirestore = FirebaseProvider.firestore,
@@ -25,6 +27,45 @@ class SplitRepository(
                 }
                 .addOnFailureListener { e -> continuation.resume(Result.failure(e)) }
         }
+
+    suspend fun addExpense(
+        planId: String,
+        name: String,
+        value: Double,
+        paidById: String,
+        splitAmongIds: List<String>
+    ): Result<Unit> = runCatching {
+        plans.document(planId).collection("expenses").add(
+            mapOf(
+                "name" to name,
+                "value" to firestoreNumber(value),
+                "paidById" to paidById,
+                "splitAmongIds" to splitAmongIds,
+                "splitMethod" to "equal",
+                "customAmounts" to emptyMap<String, Double>(),
+                "createdAt" to Timestamp.now()
+            )
+        ).await()
+        Unit
+    }
+
+    suspend fun updateExpense(
+        planId: String,
+        expenseId: String,
+        name: String,
+        value: Double,
+        paidById: String
+    ): Result<Unit> = runCatching {
+        plans.document(planId).collection("expenses").document(expenseId)
+            .update(mapOf("name" to name, "value" to firestoreNumber(value), "paidById" to paidById))
+            .await()
+        Unit
+    }
+
+    suspend fun deleteExpense(planId: String, expenseId: String): Result<Unit> = runCatching {
+        plans.document(planId).collection("expenses").document(expenseId).delete().await()
+        Unit
+    }
 
     suspend fun getSettlements(planId: String): Result<List<Settlement>> =
         suspendCancellableCoroutine { continuation ->
@@ -82,8 +123,16 @@ class SplitRepository(
         name          = getString("name").orEmpty(),
         value         = (get("value") as? Number)?.toDouble() ?: 0.0,
         paidById      = getString("paidById").orEmpty(),
-        splitAmongIds = (get("splitAmongIds") as? List<*>).orEmpty().filterIsInstance<String>()
+        splitAmongIds = (get("splitAmongIds") as? List<*>).orEmpty().filterIsInstance<String>(),
+        splitMethod   = getString("splitMethod") ?: "equal",
+        customAmounts = (get("customAmounts") as? Map<*, *>).orEmpty()
+            .mapNotNull { (k, v) -> (k as? String)?.let { key -> (v as? Number)?.let { key to it.toDouble() } } }
+            .toMap(),
+        createdAt     = getTimestamp("createdAt")?.toDate()
     )
+
+    private fun firestoreNumber(value: Double): Number =
+        if (value % 1.0 == 0.0) value.toLong() else value
 
     private fun DocumentSnapshot.toSettlement() = Settlement(
         id     = id,

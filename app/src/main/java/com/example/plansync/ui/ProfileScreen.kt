@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -29,7 +30,8 @@ fun ProfileScreen(
     onMyPlansSelected: () -> Unit = {},
     onMyActivitiesSelected: () -> Unit = {},
     onMyCrewSelected: () -> Unit = {},
-    onEditProfile: () -> Unit = {}
+    onEditProfile: () -> Unit = {},
+    onMyDebts: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedNavIndex by remember { mutableIntStateOf(4) }
@@ -146,6 +148,24 @@ fun ProfileScreen(
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
+
+                Surface(
+                    onClick = onMyDebts,
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "My Debts",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Surface(
                     onClick = viewModel::onLogOutClick,

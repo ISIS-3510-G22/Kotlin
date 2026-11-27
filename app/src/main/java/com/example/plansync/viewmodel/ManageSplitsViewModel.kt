@@ -3,25 +3,29 @@ package com.example.plansync.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.CrewRepository
+import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.SplitRepository
-import com.example.plansync.model.Expense
-import com.example.plansync.model.Settlement
 import com.example.plansync.model.Split
+import com.example.plansync.service.SplitCalculator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-private const val PAYMENT_TOLERANCE = 0.01
-
 class ManageSplitsViewModel(
     private val splitRepository: SplitRepository = SplitRepository(),
-    private val crewRepository: CrewRepository = CrewRepository()
+    private val crewRepository: CrewRepository = CrewRepository(),
+    private val planRepository: PlanRepository = PlanRepository()
 ) : ViewModel() {
+
+    enum class Tab { I_OWE, OWED_TO_ME }
 
     data class UiState(
         val splits: List<Split> = emptyList(),
+        val owedToMe: List<Split> = emptyList(),
+        val selectedTab: Tab = Tab.I_OWE,
+        val daysOverdue: Int? = null,
         val names: Map<String, String> = emptyMap(),
         val isLoading: Boolean = false,
         val errorMessage: String? = null,
@@ -51,16 +55,24 @@ class ManageSplitsViewModel(
                 return@launch
             }
 
-            val splits = buildSplits(myId, expenses, settlements)
-            val names = loadNames(splits)
+            val splits = SplitCalculator.buildSplits(myId, expenses, settlements)
+            val owedToMe = SplitCalculator.buildOwedToMe(myId, expenses, settlements)
+            val names = loadNames(splits + owedToMe)
+            val daysOverdue = SplitCalculator.daysOverdue(planRepository.getPlanDate(planId).getOrNull())
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     splits = sortByName(splits, names),
-                    names = names
+                    owedToMe = sortByName(owedToMe, names),
+                    names = names,
+                    daysOverdue = daysOverdue
                 )
             }
         }
+    }
+
+    fun onTabSelected(tab: Tab) {
+        _uiState.update { it.copy(selectedTab = tab) }
     }
 
     fun onPaidChange(planId: String, split: Split, paid: Boolean) {
@@ -91,39 +103,6 @@ class ManageSplitsViewModel(
                     _uiState.update { it.copy(isSaving = false, saveErrorMessage = error.message) }
                 }
         }
-    }
-
-    private fun buildSplits(myId: String, expenses: List<Expense>, settlements: List<Settlement>): List<Split> {
-        val netDebt = mutableMapOf<String, Double>()
-
-        for (expense in expenses) {
-            if (expense.splitAmongIds.isEmpty()) continue
-            val share = expense.value / expense.splitAmongIds.size
-            for (debtorId in expense.splitAmongIds) {
-                if (debtorId == expense.paidById) continue
-                if (debtorId == myId) {
-                    netDebt[expense.paidById] = (netDebt[expense.paidById] ?: 0.0) + share
-                } else if (expense.paidById == myId) {
-                    netDebt[debtorId] = (netDebt[debtorId] ?: 0.0) - share
-                }
-            }
-        }
-
-        for (settlement in settlements) {
-            if (settlement.toId == myId && settlement.fromId != myId) {
-                netDebt[settlement.fromId] = (netDebt[settlement.fromId] ?: 0.0) + settlement.amount
-            }
-        }
-
-        val splits = mutableListOf<Split>()
-        for ((personId, amount) in netDebt) {
-            if (personId.isBlank() || amount <= PAYMENT_TOLERANCE) continue
-            val paidSoFar = settlements
-                .filter { it.fromId == myId && it.toId == personId }
-                .sumOf { it.amount }
-            splits.add(Split(personId, amount, paidSoFar, paidSoFar >= amount - PAYMENT_TOLERANCE))
-        }
-        return splits
     }
 
     private suspend fun loadNames(splits: List<Split>): Map<String, String> {

@@ -1,5 +1,10 @@
 package com.example.plansync.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.Warning
+import com.example.plansync.ui.theme.CoralLight
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -181,6 +186,7 @@ fun MyPlansScreen(
                             PlanCard(
                                 plan = plan,
                                 rainChance = rainChanceFor(plan, uiState.rainForecast),
+                                hasOverduePayments = plan.id in uiState.overduePlanIds,
                                 onClick = {
                                     if (plan.status == PlanStatus.PENDING_INVITE) {
                                         viewModel.onInviteTapped(plan)
@@ -319,6 +325,7 @@ private fun EmptyPlansMessage(tab: PlanStatus) {
 private fun PlanCard(
     plan: Plan,
     rainChance: Int? = null,
+    hasOverduePayments: Boolean = false,
     onClick: () -> Unit = {},
     onLeaveReview: () -> Unit = {},
     onManageSplits: () -> Unit = {},
@@ -366,6 +373,30 @@ private fun PlanCard(
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 ParticipantAvatarRow(participants = plan.participants)
+            }
+
+            if (hasOverduePayments) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .background(CoralLight, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Coral,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Overdue payments · more than 3 days unpaid",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Coral,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
 
             if (plan.status == PlanStatus.PAST) {
