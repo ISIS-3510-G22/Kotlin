@@ -1,10 +1,15 @@
 package com.example.plansync.data
 
+import com.google.firebase.auth.FirebaseAuth
+
 // Persists partially-filled Create Plan forms so users can resume after abandoning.
 // Backed by Room (DraftDatabase) — replaces the previous single-draft DataStore.
-class PlanDraftRepository {
+class PlanDraftRepository(
+    private val auth: FirebaseAuth = FirebaseProvider.auth
+) {
 
     private val dao = DraftDatabase.dao
+    private val currentUid: String get() = auth.currentUser?.uid.orEmpty()
 
     data class Draft(
         val id: String,
@@ -22,11 +27,11 @@ class PlanDraftRepository {
         val updatedAt: Long = System.currentTimeMillis()
     )
 
-    suspend fun getAll(): List<Draft> = dao.getAll().map { it.toDraft() }
+    suspend fun getAll(): List<Draft> = dao.getAll(currentUid).map { it.toDraft() }
 
-    suspend fun loadById(id: String): Draft? = dao.getById(id)?.toDraft()
+    suspend fun loadById(id: String): Draft? = dao.getById(id, currentUid)?.toDraft()
 
-    suspend fun loadLatest(): Draft? = dao.getLatest()?.toDraft()
+    suspend fun loadLatest(): Draft? = dao.getLatest(currentUid)?.toDraft()
 
     suspend fun save(draft: Draft) = dao.upsert(draft.toEntity())
 
@@ -50,6 +55,7 @@ class PlanDraftRepository {
 
     private fun Draft.toEntity() = DraftEntity(
         id                 = id,
+        uid                = currentUid,
         planName           = planName,
         selectedDateMillis = selectedDateMillis ?: -1L,
         selectedHour       = selectedHour,
