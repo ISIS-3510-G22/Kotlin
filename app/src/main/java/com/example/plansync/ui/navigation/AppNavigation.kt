@@ -305,7 +305,13 @@ fun MainNavHost(
         composable(Routes.MY_DRAFTS) {
             MyDraftsScreen(
                 onBack   = { navController.popBackStack() },
-                onResume = { draftId -> navController.navigate(Routes.createPlan(draftId = draftId)) }
+                onResume = { draftId ->
+                    navController.navigate(Routes.createPlan(draftId = draftId)) {
+                        // Replace the existing Create Plan entry (and My Drafts above it) so
+                        // Resume does not stack a second Create Plan on the back stack.
+                        popUpTo(Routes.CREATE_PLAN) { inclusive = true }
+                    }
+                }
             )
         }
 
