@@ -86,7 +86,7 @@ fun ForgotPasswordScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                val canSend = !uiState.isLoading && !uiState.isOffline
+                val canSend = !uiState.isLoading
                 Surface(
                     onClick = viewModel::sendReset,
                     enabled = canSend,
@@ -126,7 +126,7 @@ fun ForgotPasswordScreen(
         ) {
             OfflineBanner(
                 isOnline = !uiState.isOffline,
-                message = "You're offline - password reset requires a connection"
+                message = "You're offline - we will send the link when you are back online"
             )
 
             Text(
@@ -150,7 +150,7 @@ fun ForgotPasswordScreen(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
-                    if (!uiState.isLoading && !uiState.isOffline) viewModel.sendReset()
+                    if (!uiState.isLoading) viewModel.sendReset()
                 }),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth(),
@@ -161,6 +161,15 @@ fun ForgotPasswordScreen(
                     focusedBorderColor = MaterialTheme.colorScheme.primary
                 )
             )
+
+            if (uiState.infoMessage != null) {
+                Text(
+                    text = uiState.infoMessage!!,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                )
+            }
 
             if (uiState.errorMessage != null) {
                 Text(

@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Patterns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.plansync.data.PasswordResetQueueRepository
 import com.example.plansync.data.PasswordResetRepository
 import com.example.plansync.service.NetworkMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +19,8 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
 
     private val repository = PasswordResetRepository()
 
+    private val queueRepository = PasswordResetQueueRepository()
+
     private val networkMonitor = NetworkMonitor.get(application)
 
     data class UiState(
@@ -25,7 +28,9 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
         val isLoading: Boolean = false,
         val errorMessage: String? = null,
         val successMessage: String? = null,
-        val isOffline: Boolean = false
+        val isOffline: Boolean = false,
+        val pendingEmail: String? = null,
+        val infoMessage: String? = null
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -33,7 +38,10 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
 
     init {
         networkMonitor.isOnline
-            .onEach { online -> _uiState.update { it.copy(isOffline = !online) } }
+            .onEach { online ->
+                _uiState.update { it.copy(isOffline = !online) }
+                if (online && _uiState.value.pendingEmail != null) flushPending()
+            }
             .launchIn(viewModelScope)
     }
 
@@ -42,7 +50,22 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun onScreenOpened() {
-        _uiState.update { it.copy(email = "", isLoading = false, errorMessage = null, successMessage = null) }
+        _uiState.update {
+            it.copy(
+                email = "",
+                isLoading = false,
+                errorMessage = null,
+                successMessage = null,
+                infoMessage = null,
+                pendingEmail = null
+            )
+        }
+        viewModelScope.launch {
+            queueRepository.getPending().getOrNull()?.let { saved ->
+                _uiState.update { it.copy(email = saved, pendingEmail = saved, infoMessage = OFFLINE_INFO) }
+                if (networkMonitor.isCurrentlyOnline()) flushPending()
+            }
+        }
     }
 
     fun sendReset() {
@@ -56,16 +79,32 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
             return
         }
         if (!networkMonitor.isCurrentlyOnline()) {
-            _uiState.update {
-                it.copy(
-                    errorMessage = "No internet connection. Please try again when online.",
-                    successMessage = null
-                )
+            viewModelScope.launch {
+                queueRepository.save(email)
+                    .onSuccess {
+                        _uiState.update {
+                            it.copy(
+                                pendingEmail = email,
+                                infoMessage = OFFLINE_INFO,
+                                errorMessage = null,
+                                successMessage = null
+                            )
+                        }
+                    }
+                    .onFailure {
+                        _uiState.update {
+                            it.copy(errorMessage = "Could not save your request. Please try again.")
+                        }
+                    }
             }
             return
         }
 
         viewModelScope.launch {
+            if (_uiState.value.pendingEmail != null) {
+                queueRepository.clear()
+                _uiState.update { it.copy(pendingEmail = null, infoMessage = null) }
+            }
             _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null) }
 
             repository.sendResetEmail(email)
@@ -81,5 +120,36 @@ class ForgotPasswordViewModel(application: Application) : AndroidViewModel(appli
                     _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
                 }
         }
+    }
+
+    private fun flushPending() {
+        val state = _uiState.value
+        val email = state.pendingEmail ?: return
+        if (state.isLoading) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, successMessage = null) }
+
+            repository.sendResetEmail(email)
+                .onSuccess {
+                    queueRepository.clear()
+                    _uiState.update {
+                        it.copy(
+                            pendingEmail = null,
+                            infoMessage = null,
+                            isLoading = false,
+                            successMessage = "The reset link was sent. If an account exists for this email, check your inbox to reset your password."
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+                }
+        }
+    }
+
+    private companion object {
+        const val OFFLINE_INFO =
+            "You are offline. We saved your request and will send the link when you are back online. Keep the app open."
     }
 }
