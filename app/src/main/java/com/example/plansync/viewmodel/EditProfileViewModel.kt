@@ -72,7 +72,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
 
     fun onFullNameChange(value: String) = _uiState.update { it.copy(fullName = value) }
 
-    fun onPhoneChange(value: String) = _uiState.update { it.copy(phone = value) }
+    fun onPhoneChange(value: String) = _uiState.update { it.copy(phone = value.filter(Char::isDigit).take(SignUpViewModel.PHONE_LENGTH)) }
 
     fun onPhotoPicked(uri: Uri) {
         if (!_uiState.value.isOnline) {
@@ -120,6 +120,10 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
         val lastName = parts.getOrElse(1) { "" }
         if (name.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Please enter your name.") }
+            return
+        }
+        if (current.phone.length != SignUpViewModel.PHONE_LENGTH) {
+            _uiState.update { it.copy(errorMessage = "Phone number must have ${SignUpViewModel.PHONE_LENGTH} digits.") }
             return
         }
 
