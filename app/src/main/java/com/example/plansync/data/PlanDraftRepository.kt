@@ -1,12 +1,21 @@
 package com.example.plansync.data
 
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 // Persists partially-filled Create Plan forms so users can resume after abandoning.
 // Backed by Room (DraftDatabase) — replaces the previous single-draft DataStore.
 class PlanDraftRepository(
     private val auth: FirebaseAuth = FirebaseProvider.auth
 ) {
+
+    companion object {
+        // Outlives the ViewModel — used to flush a pending draft write in onCleared().
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    }
 
     private val dao = DraftDatabase.dao
     private val currentUid: String get() = auth.currentUser?.uid.orEmpty()
@@ -34,6 +43,9 @@ class PlanDraftRepository(
     suspend fun loadLatest(): Draft? = dao.getLatest(currentUid)?.toDraft()
 
     suspend fun save(draft: Draft) = dao.upsert(draft.toEntity())
+
+    // Launches an immediate write on the process-lifetime scope — safe to call from onCleared().
+    fun saveNow(draft: Draft) { scope.launch { save(draft) } }
 
     suspend fun delete(id: String) = dao.delete(id)
 
