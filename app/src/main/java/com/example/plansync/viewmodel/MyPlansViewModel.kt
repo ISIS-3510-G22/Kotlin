@@ -113,6 +113,7 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
 
+            shown.onSuccess { plans -> loadOverduePlans(plans) }
             withContext(Dispatchers.Main) {
                 shown
                     .onSuccess { plans -> _uiState.update { it.copy(allPlans = plans, showingSavedPlans = fromSaved) } }
@@ -120,7 +121,6 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
             }
             if (online) {
                 result.onSuccess { plans ->
-                    loadOverduePlans(plans)
                     snapshotRepository.savePlans(plans).onFailure { error ->
                         withContext(Dispatchers.Main) {
                             _uiState.update { it.copy(savedPlansError = error.message) }
@@ -155,8 +155,8 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
                 .filter { it.status == PlanStatus.PAST && SplitCalculator.daysOverdue(it.dateTime) != null }
                 .map { plan ->
                     async {
-                        val expenses = async { splitRepository.getExpenses(plan.id).getOrNull() }
-                        val settlements = async { splitRepository.getSettlements(plan.id).getOrNull() }
+                        val expenses = async { OfflineSyncService.loadExpenses(plan.id).getOrNull() }
+                        val settlements = async { OfflineSyncService.loadSettlements(plan.id).getOrNull() }
                         val e = expenses.await() ?: return@async null
                         val s = settlements.await() ?: return@async null
                         val splits = SplitCalculator.buildSplits(myId, e, s) + SplitCalculator.buildOwedToMe(myId, e, s)

@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.CrewRepository
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.SplitRepository
+import com.example.plansync.model.PendingAction
 import com.example.plansync.model.Split
+import com.example.plansync.service.OfflineSyncService
 import com.example.plansync.service.SplitCalculator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +30,7 @@ class ManageSplitsViewModel(
         val daysOverdue: Int? = null,
         val names: Map<String, String> = emptyMap(),
         val isLoading: Boolean = false,
+        val isOnline: Boolean = true,
         val errorMessage: String? = null,
         val isSaving: Boolean = false,
         val saveErrorMessage: String? = null
@@ -36,7 +39,23 @@ class ManageSplitsViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    private var currentPlanId: String? = null
+
+    init {
+        viewModelScope.launch {
+            OfflineSyncService.isOnline.collect { online ->
+                val cameBackOnline = online && !_uiState.value.isOnline
+                _uiState.update { it.copy(isOnline = online) }
+                if (cameBackOnline) {
+                    OfflineSyncService.syncNow()
+                    currentPlanId?.let(::load)
+                }
+            }
+        }
+    }
+
     fun load(planId: String) {
+        currentPlanId = planId
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
@@ -46,12 +65,12 @@ class ManageSplitsViewModel(
                 return@launch
             }
 
-            val expenses = splitRepository.getExpenses(planId).getOrElse { error ->
-                _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+            val expenses = OfflineSyncService.loadExpenses(planId).getOrElse { error ->
+                _uiState.update { it.copy(isLoading = false, errorMessage = loadErrorMessage(error)) }
                 return@launch
             }
-            val settlements = splitRepository.getSettlements(planId).getOrElse { error ->
-                _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+            val settlements = OfflineSyncService.loadSettlements(planId).getOrElse { error ->
+                _uiState.update { it.copy(isLoading = false, errorMessage = loadErrorMessage(error)) }
                 return@launch
             }
 
@@ -81,7 +100,16 @@ class ManageSplitsViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, saveErrorMessage = null) }
 
-            val result = if (paid) {
+            val myId = splitRepository.currentUserId.orEmpty()
+            val result = if (!OfflineSyncService.isOnlineNow()) {
+                val action = if (paid) {
+                    PendingAction.AddSettlement(planId, myId, split.personId, split.amount - split.paidSoFar)
+                } else {
+                    PendingAction.DeleteMySettlementsTo(planId, myId, split.personId)
+                }
+                OfflineSyncService.enqueue(action)
+                Result.success(Unit)
+            } else if (paid) {
                 splitRepository.addSettlement(planId, split.personId, split.amount - split.paidSoFar)
             } else {
                 splitRepository.deleteMySettlementsTo(planId, split.personId)
@@ -104,6 +132,9 @@ class ManageSplitsViewModel(
                 }
         }
     }
+
+    private fun loadErrorMessage(error: Throwable): String? =
+        if (error.message == SplitRepository.CONNECT_TO_LOAD) "Connect to the internet to load this plan's splits." else error.message
 
     private suspend fun loadNames(splits: List<Split>): Map<String, String> {
         val personIds = splits.map { it.personId }.distinct()

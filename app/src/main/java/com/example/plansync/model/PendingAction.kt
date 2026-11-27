@@ -74,4 +74,45 @@ sealed class PendingAction {
         val sourceId: String?,
         override val id: String = UUID.randomUUID().toString()
     ) : PendingAction()
+
+    data class AddExpense(
+        val planId: String,
+        val expenseId: String,
+        val name: String,
+        val value: Double,
+        val paidById: String,
+        val splitAmongIds: List<String>,
+        val createdAtMillis: Long,
+        override val id: String = UUID.randomUUID().toString()
+    ) : PendingAction()
+
+    data class UpdateExpense(
+        val planId: String,
+        val expenseId: String,
+        val name: String,
+        val value: Double,
+        val paidById: String,
+        override val id: String = UUID.randomUUID().toString()
+    ) : PendingAction()
+
+    data class DeleteExpense(
+        val planId: String,
+        val expenseId: String,
+        override val id: String = UUID.randomUUID().toString()
+    ) : PendingAction()
+
+    data class AddSettlement(
+        val planId: String,
+        val fromId: String,
+        val toId: String,
+        val amount: Double,
+        override val id: String = UUID.randomUUID().toString()
+    ) : PendingAction()
+
+    data class DeleteMySettlementsTo(
+        val planId: String,
+        val fromId: String,
+        val toId: String,
+        override val id: String = UUID.randomUUID().toString()
+    ) : PendingAction()
 }

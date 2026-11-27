@@ -1,23 +1,28 @@
 package com.example.plansync.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.AnalyticsRepository
 import com.example.plansync.data.CrewRepository
+import com.example.plansync.data.PlanDatabase
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.SplitRepository
+import com.example.plansync.model.PendingAction
+import com.example.plansync.service.OfflineSyncService
+import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class ExpenseFormViewModel(
-    private val splitRepository: SplitRepository = SplitRepository(),
-    private val planRepository: PlanRepository = PlanRepository(),
-    private val crewRepository: CrewRepository = CrewRepository(),
-    private val analyticsRepository: AnalyticsRepository = AnalyticsRepository()
-) : ViewModel() {
+class ExpenseFormViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val splitRepository = SplitRepository()
+    private val planRepository = PlanRepository(planDao = PlanDatabase.get(application).planDao())
+    private val crewRepository = CrewRepository()
+    private val analyticsRepository = AnalyticsRepository()
 
     data class Person(val id: String, val name: String)
 
@@ -30,6 +35,7 @@ class ExpenseFormViewModel(
         val isLoading: Boolean = false,
         val isSaving: Boolean = false,
         val isDone: Boolean = false,
+        val isOnline: Boolean = true,
         val errorMessage: String? = null
     )
 
@@ -41,6 +47,12 @@ class ExpenseFormViewModel(
     private var splitAmongIds: List<String> = emptyList()
     private var loaded = false
 
+    init {
+        viewModelScope.launch {
+            OfflineSyncService.isOnline.collect { online -> _uiState.update { it.copy(isOnline = online) } }
+        }
+    }
+
     fun load(planId: String, expenseId: String?) {
         if (loaded) return
         loaded = true
@@ -50,12 +62,12 @@ class ExpenseFormViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, isEditing = expenseId != null, errorMessage = null) }
 
-            val plan = planRepository.getPlan(planId).getOrElse { error ->
-                _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+            val plan = planRepository.getPlan(planId).getOrElse {
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Connect to the internet to load this plan.") }
                 return@launch
             }
             val expense = expenseId?.let { id ->
-                splitRepository.getExpenses(planId).getOrNull()?.find { it.id == id }
+                OfflineSyncService.loadExpenses(planId).getOrNull()?.find { it.id == id }
                     ?: run {
                         _uiState.update { it.copy(isLoading = false, errorMessage = "This expense no longer exists.") }
                         return@launch
@@ -112,8 +124,20 @@ class ExpenseFormViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, errorMessage = null) }
             val id = expenseId
+
+            if (!OfflineSyncService.isOnlineNow()) {
+                val action = if (id == null) {
+                    PendingAction.AddExpense(planId, UUID.randomUUID().toString(), name, value, paidById, splitAmongIds, System.currentTimeMillis())
+                } else {
+                    PendingAction.UpdateExpense(planId, id, name, value, paidById)
+                }
+                OfflineSyncService.enqueue(action)
+                _uiState.update { it.copy(isSaving = false, isDone = true) }
+                return@launch
+            }
+
             val result = if (id == null) {
-                splitRepository.addExpense(planId, name, value, paidById, splitAmongIds)
+                splitRepository.addExpense(planId, UUID.randomUUID().toString(), name, value, paidById, splitAmongIds)
             } else {
                 splitRepository.updateExpense(planId, id, name, value, paidById)
             }
@@ -131,6 +155,13 @@ class ExpenseFormViewModel(
         if (_uiState.value.isSaving) return
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, errorMessage = null) }
+
+            if (!OfflineSyncService.isOnlineNow()) {
+                OfflineSyncService.deleteExpenseOffline(planId, id)
+                _uiState.update { it.copy(isSaving = false, isDone = true) }
+                return@launch
+            }
+
             splitRepository.deleteExpense(planId, id)
                 .onSuccess { _uiState.update { it.copy(isSaving = false, isDone = true) } }
                 .onFailure { error -> _uiState.update { it.copy(isSaving = false, errorMessage = error.message) } }

@@ -58,10 +58,16 @@ fun PlanExpensesScreen(
     Scaffold(
         containerColor = Color(0xFFF5F5F5),
         topBar = {
-            BackTopBar(title = "Plan Expenses", onBack = onBack) {
-                IconButton(onClick = onAddExpense) {
-                    Icon(Icons.Default.Add, contentDescription = "Add expense", tint = Color.Black)
+            Column {
+                BackTopBar(title = "Plan Expenses", onBack = onBack) {
+                    IconButton(onClick = onAddExpense) {
+                        Icon(Icons.Default.Add, contentDescription = "Add expense", tint = Color.Black)
+                    }
                 }
+                OfflineBanner(
+                    isOnline = uiState.isOnline,
+                    message = "You're offline. Showing expenses saved on your phone, changes will sync when you reconnect."
+                )
             }
         },
         bottomBar = {
