@@ -11,6 +11,7 @@ import com.example.plansync.data.SplitRepository
 import com.example.plansync.model.Expense
 import com.example.plansync.model.PendingAction
 import com.example.plansync.service.OfflineSyncService
+import com.example.plansync.service.PerfTrace
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -64,7 +65,7 @@ class ExpenseFormViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, isEditing = expenseId != null, errorMessage = null) }
 
-            val plan = planRepository.getPlan(planId).getOrElse {
+            val plan = PerfTrace.traced("ExpenseForm.loadParticipants") { planRepository.getPlan(planId) }.getOrElse {
                 _uiState.update { it.copy(isLoading = false, errorMessage = "Connect to the internet to load this plan.") }
                 return@launch
             }

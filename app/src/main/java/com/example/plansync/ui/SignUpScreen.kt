@@ -37,6 +37,7 @@ fun SignUpScreen(
     }
 
     Scaffold(
+        modifier = Modifier.imePadding(),
         topBar = {
             Row(
                 modifier = Modifier

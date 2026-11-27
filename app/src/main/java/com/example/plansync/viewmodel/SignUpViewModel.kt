@@ -33,12 +33,16 @@ class SignUpViewModel(
     fun onNameChange(value: String) = _uiState.update { it.copy(name = value) }
     fun onLastNameChange(value: String) = _uiState.update { it.copy(lastName = value) }
     fun onUsernameChange(value: String) = _uiState.update { it.copy(username = value) }
-    fun onPhoneChange(value: String) = _uiState.update { it.copy(phone = value) }
+    fun onPhoneChange(value: String) = _uiState.update { it.copy(phone = value.filter(Char::isDigit).take(PHONE_LENGTH)) }
     fun onEmailChange(value: String) = _uiState.update { it.copy(email = value) }
     fun onPasswordChange(value: String) = _uiState.update { it.copy(password = value) }
 
     fun createProfile() {
         val current = _uiState.value
+        if (current.phone.length != PHONE_LENGTH) {
+            _uiState.update { it.copy(errorMessage = "Phone number must have $PHONE_LENGTH digits.") }
+            return
+        }
         if (current.password.any { it !in '!'..'~' }) {
             _uiState.update { it.copy(errorMessage = "Password can't contain spaces, accents or emojis.") }
             return
@@ -62,5 +66,9 @@ class SignUpViewModel(
 
     fun onProfileCreatedHandled() {
         _uiState.update { it.copy(createdUser = null) }
+    }
+
+    companion object {
+        const val PHONE_LENGTH = 10
     }
 }

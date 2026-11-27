@@ -9,6 +9,7 @@ import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
 import com.example.plansync.model.RsvpStatus
+import com.example.plansync.service.PerfTrace
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import java.util.UUID
@@ -83,7 +84,9 @@ class PlanRepository(
         val planDoc: DocumentSnapshot? = try {
             withTimeout(8_000) {
                 withContext(Dispatchers.IO) {
-                    db.collection("plans").document(planId).get(Source.SERVER).await()
+                    PerfTrace.traced("ExpenseForm.firestoreRead") {
+                        db.collection("plans").document(planId).get(Source.SERVER).await()
+                    }
                 }
             }
         } catch (_: Exception) { null }
@@ -95,7 +98,7 @@ class PlanRepository(
         val activityIds = (planDoc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>()
         // Fetch all activities in parallel instead of one-by-one.
         val activities = coroutineScope {
-            activityIds.map { actId -> async(Dispatchers.IO) { fetchActivity(actId) } }.awaitAll()
+            activityIds.map { actId -> async(Dispatchers.IO) { PerfTrace.traced("ExpenseForm.firestoreRead") { fetchActivity(actId) } } }.awaitAll()
         }.filterNotNull()
 
         val uid = auth.currentUser?.uid
