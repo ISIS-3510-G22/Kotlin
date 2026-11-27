@@ -1,6 +1,7 @@
 package com.example.plansync.ui
 
 import android.Manifest
+import android.os.Trace
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -100,9 +101,11 @@ fun CreatePlanScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val recommended = remember(uiState.recommendedActivities, uiState.selectedActivities) {
-        uiState.recommendedActivities.filter { rec ->
-            uiState.selectedActivities.none { it.id == rec.id }
-        }
+        Trace.beginSection("CreatePlan.recommendedFilter")
+        val selectedIds = uiState.selectedActivities.mapTo(HashSet()) { it.id }
+        val result = uiState.recommendedActivities.filter { it.id !in selectedIds }
+        Trace.endSection()
+        result
     }
 
     LaunchedEffect(preselectedActivityId) {

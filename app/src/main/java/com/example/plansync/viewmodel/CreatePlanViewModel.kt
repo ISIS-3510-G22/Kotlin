@@ -16,6 +16,7 @@ import com.example.plansync.service.LocationService
 import com.example.plansync.service.NetworkMonitor
 import com.example.plansync.service.OfflineSyncService
 import com.google.firebase.Timestamp
+import android.os.Trace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +26,8 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -51,6 +54,7 @@ class CreatePlanViewModel(
     private val flowSessionId = UUID.randomUUID().toString()
     private var lastStepLogged = 0
     private var currentDraftId: String = flowSessionId
+    private var saveDraftJob: Job? = null
 
     data class UiState(
         val planName: String = "",
@@ -190,8 +194,15 @@ class CreatePlanViewModel(
     }
 
     private fun saveDraft() {
-        viewModelScope.launch {
+        val snapshot = _uiState.value
+        if (snapshot.isSaved) return
+        if (snapshot.planName.isBlank() && lastStepLogged == 0) return
+        saveDraftJob?.cancel()
+        saveDraftJob = viewModelScope.launch {
+            delay(400)
             val s = _uiState.value
+            if (s.isSaved) return@launch
+            Trace.beginSection("CreatePlan.saveDraft")
             draftRepository.save(
                 PlanDraftRepository.Draft(
                     id                  = currentDraftId,
@@ -208,6 +219,7 @@ class CreatePlanViewModel(
                     lastStep            = lastStepLogged
                 )
             )
+            Trace.endSection()
         }
     }
 
@@ -360,7 +372,7 @@ class CreatePlanViewModel(
                     )
                 )
                 draftRepository.delete(currentDraftId)
-                _uiState.update { it.copy(isLoading = false, pendingSync = true) }
+                _uiState.update { it.copy(isLoading = false, isSaved = true, pendingSync = true) }
                 return@launch
             }
 

@@ -44,7 +44,6 @@ class MyDraftsViewModel(application: Application) : AndroidViewModel(application
         networkMonitor.isOnline
             .onEach { online -> _uiState.update { it.copy(isOnline = online) } }
             .launchIn(viewModelScope)
-        load()
     }
 
     fun load() {

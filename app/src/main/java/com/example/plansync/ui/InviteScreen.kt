@@ -1,5 +1,6 @@
 package com.example.plansync.ui
 
+import android.os.Trace
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -252,12 +253,15 @@ private fun ContactRow(
         ) {
             if (contact.photoUrl.isNotBlank()) {
                 val imageRequest = remember(contact.photoUrl) {
-                    ImageRequest.Builder(context)
+                    Trace.beginSection("ContactRow.buildImageRequest")
+                    val req = ImageRequest.Builder(context)
                         .data(contact.photoUrl)
                         .memoryCacheKey(contact.photoUrl)
                         .diskCacheKey(contact.photoUrl)
                         .crossfade(true)
                         .build()
+                    Trace.endSection()
+                    req
                 }
                 AsyncImage(
                     model = imageRequest,
