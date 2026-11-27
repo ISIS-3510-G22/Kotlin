@@ -86,7 +86,7 @@ fun ForgotPasswordScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                val canSend = !uiState.isLoading
+                val canSend = !uiState.isLoading && uiState.cooldownSeconds == 0
                 Surface(
                     onClick = viewModel::sendReset,
                     enabled = canSend,
@@ -106,7 +106,7 @@ fun ForgotPasswordScreen(
                         }
                     } else {
                         Text(
-                            text = "Send link",
+                            text = if (uiState.cooldownSeconds > 0) "Wait ${uiState.cooldownSeconds}s" else "Send link",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimary,
@@ -150,7 +150,7 @@ fun ForgotPasswordScreen(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
-                    if (!uiState.isLoading) viewModel.sendReset()
+                    if (!uiState.isLoading && uiState.cooldownSeconds == 0) viewModel.sendReset()
                 }),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth(),
