@@ -187,6 +187,11 @@ fun MyPlansScreen(
                                 plan = plan,
                                 rainChance = rainChanceFor(plan, uiState.rainForecast),
                                 hasOverduePayments = plan.id in uiState.overduePlanIds,
+                                inviteWaitText = if (plan.status == PlanStatus.PENDING_INVITE) {
+                                    uiState.inviteWaitDays[plan.id]?.let { inviteWaitLabel(it) }
+                                } else {
+                                    null
+                                },
                                 onClick = {
                                     if (plan.status == PlanStatus.PENDING_INVITE) {
                                         viewModel.onInviteTapped(plan)
@@ -326,6 +331,7 @@ private fun PlanCard(
     plan: Plan,
     rainChance: Int? = null,
     hasOverduePayments: Boolean = false,
+    inviteWaitText: String? = null,
     onClick: () -> Unit = {},
     onLeaveReview: () -> Unit = {},
     onManageSplits: () -> Unit = {},
@@ -370,6 +376,15 @@ private fun PlanCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF888888)
                     )
+                    if (inviteWaitText != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = inviteWaitText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Coral,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 ParticipantAvatarRow(participants = plan.participants)
@@ -441,6 +456,12 @@ private fun PlanCard(
             }
         }
     }
+}
+
+private fun inviteWaitLabel(days: Int): String = when (days) {
+    0 -> "Invited today - no answer yet"
+    1 -> "Invited 1 day ago - no answer yet"
+    else -> "Invited $days days ago - no answer yet"
 }
 
 private fun planDateText(plan: Plan): String {

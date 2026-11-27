@@ -54,7 +54,8 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
         val showingSavedPlans: Boolean = false,
         val savedPlansError: String? = null,
         val reviewQueueError: String? = null,
-        val overduePlanIds: Set<String> = emptySet()
+        val overduePlanIds: Set<String> = emptySet(),
+        val inviteWaitDays: Map<String, Int> = emptyMap()
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -142,10 +143,30 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
             val filtered = withContext(Dispatchers.Default) {
                 plansForTab(current.allPlans, current.selectedTab)
             }
+            val waitDays = withContext(Dispatchers.Default) {
+                buildInviteWaitDays(current.allPlans)
+            }
             withContext(Dispatchers.Main) {
-                _uiState.update { it.copy(isLoading = false, filteredPlans = filtered) }
+                _uiState.update { it.copy(isLoading = false, filteredPlans = filtered, inviteWaitDays = waitDays) }
             }
         }
+    }
+
+    private fun buildInviteWaitDays(plans: List<Plan>): Map<String, Int> {
+        val myId = splitRepository.currentUserId ?: return emptyMap()
+        val now = System.currentTimeMillis()
+        val result = mutableMapOf<String, Int>()
+        for (plan in plans) {
+            if (plan.status != PlanStatus.PENDING_INVITE) continue
+            val planDate = plan.dateTime
+            if (planDate != null && planDate.time < now) continue
+            val mine = plan.invitations.find { it.userId == myId } ?: continue
+            if (mine.rsvp != RsvpStatus.INVITED) continue
+            val invitedAt = mine.invitedAt ?: continue
+            val days = ((now - invitedAt.time) / 86_400_000L).toInt()
+            result[plan.id] = maxOf(days, 0)
+        }
+        return result
     }
 
     private fun loadOverduePlans(plans: List<Plan>) {
