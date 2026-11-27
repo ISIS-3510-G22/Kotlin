@@ -6,6 +6,7 @@ import com.example.plansync.data.AnalyticsRepository
 import com.example.plansync.data.InviteRepository
 import com.example.plansync.data.PendingActionRepository
 import com.example.plansync.data.PlanRepository
+import com.example.plansync.data.PlanSnapshotRepository
 import com.example.plansync.data.ProfileRepository
 import com.example.plansync.data.SplitRepository
 import com.example.plansync.data.WriteResult
@@ -14,6 +15,7 @@ import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.Expense
 import com.example.plansync.model.PendingAction
+import com.example.plansync.model.Plan
 import com.example.plansync.model.Settlement
 import com.example.plansync.model.User
 import java.util.Date
@@ -40,6 +42,7 @@ object OfflineSyncService {
     private val planRepository = PlanRepository()
     private val inviteRepository = InviteRepository()
     private val splitRepository = SplitRepository()
+    private val planSnapshots = PlanSnapshotRepository()
     private lateinit var locationService: LocationService
     private lateinit var appContext: Context
     private val mutex = Mutex()
@@ -100,6 +103,7 @@ object OfflineSyncService {
         is PendingAction.DeleteExpense       -> "Your expense deletion"
         is PendingAction.AddSettlement       -> "Your payment"
         is PendingAction.DeleteMySettlementsTo -> "Your payment change"
+        is PendingAction.AddActivityToPlan   -> "Adding \"${action.activityName}\" to your plan"
     }
 
     suspend fun saveActivityOffline(action: PendingAction.SaveActivity) {
@@ -148,6 +152,23 @@ object OfflineSyncService {
     }
 
     suspend fun enqueue(action: PendingAction) = queue(action)
+
+    suspend fun addActivityToPlanOffline(action: PendingAction.AddActivityToPlan) {
+        queue(action)
+        val plans = planSnapshots.getPlans().getOrNull() ?: return
+        planSnapshots.savePlans(plans.map { it.withActivity(action.planId, action.activityId) })
+    }
+
+    suspend fun loadPlansForAddToPlan(online: Boolean): Result<List<Plan>> {
+        val plans = if (online) planRepository.getMyPlans() else planSnapshots.getPlans()
+        val pending = pendingActions.getAll().filterIsInstance<PendingAction.AddActivityToPlan>()
+        return plans.map { list ->
+            pending.fold(list) { acc, action -> acc.map { it.withActivity(action.planId, action.activityId) } }
+        }
+    }
+
+    private fun Plan.withActivity(planId: String, activityId: String): Plan =
+        if (id == planId && activityId !in activityIds) copy(activityIds = activityIds + activityId) else this
 
     fun isOnlineNow(): Boolean = NetworkMonitor.get(appContext).isCurrentlyOnline()
 
@@ -319,6 +340,8 @@ object OfflineSyncService {
             splitRepository.addSettlement(action.planId, action.toId, action.amount).isSuccess
         is PendingAction.DeleteMySettlementsTo ->
             splitRepository.deleteMySettlementsTo(action.planId, action.toId).isSuccess
+        is PendingAction.AddActivityToPlan ->
+            planRepository.addActivityToPlan(action.planId, action.activityId, action.tags).isSuccess
         is PendingAction.CreatePlan -> {
             val date = planDateTime(action.dateMillis, action.hour, action.minute)
             val result = planRepository.createPlan(
@@ -350,6 +373,7 @@ object OfflineSyncService {
         is PendingAction.SaveActivity -> "Activity \"${action.name}\""
         is PendingAction.AddExpense   -> "Expense \"${action.name}\""
         is PendingAction.AddSettlement -> "Payment"
+        is PendingAction.AddActivityToPlan -> "Activity \"${action.activityName}\" in plan"
         else                          -> "queued action"
     }
 

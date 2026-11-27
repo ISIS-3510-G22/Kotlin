@@ -43,19 +43,25 @@ fun AddToPlanScreen(
     Scaffold(
         containerColor = Color(0xFFF5F5F5),
         topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Add to Plan",
+                        style = MaterialTheme.typography.headlineSmall
+                    )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Add to Plan",
-                    style = MaterialTheme.typography.headlineSmall
+                OfflineBanner(
+                    isOnline = uiState.isOnline,
+                    message = "You're offline. Showing plans saved on your phone, the activity will be added when you reconnect."
                 )
             }
         },
