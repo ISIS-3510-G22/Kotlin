@@ -56,6 +56,9 @@ fun MyDraftsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // Reload every time this screen enters composition (including back-stack returns).
+    androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.load() }
+
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF5F5F5))) {
 
         Row(

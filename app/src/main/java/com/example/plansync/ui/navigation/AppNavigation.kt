@@ -292,12 +292,10 @@ fun MainNavHost(
             val activityId = backStackEntry.arguments?.getString("activityId")
             val origin     = backStackEntry.arguments?.getString("origin")
             val sourceId   = backStackEntry.arguments?.getString("sourceId")
-            val draftId    = backStackEntry.arguments?.getString("draftId")
             CreatePlanScreen(
                 preselectedActivityId = activityId,
                 origin                = origin,
                 sourceId              = sourceId,
-                draftId               = draftId,
                 onBack    = { navController.popBackStack() },
                 onSaved   = { navController.popBackStack() },
                 onDrafts  = { navController.navigate(Routes.MY_DRAFTS) }
@@ -307,7 +305,13 @@ fun MainNavHost(
         composable(Routes.MY_DRAFTS) {
             MyDraftsScreen(
                 onBack   = { navController.popBackStack() },
-                onResume = { draftId -> navController.navigate(Routes.createPlan(draftId = draftId)) }
+                onResume = { draftId ->
+                    navController.navigate(Routes.createPlan(draftId = draftId)) {
+                        // Replace the existing Create Plan entry (and My Drafts above it) so
+                        // Resume does not stack a second Create Plan on the back stack.
+                        popUpTo(Routes.CREATE_PLAN) { inclusive = true }
+                    }
+                }
             )
         }
 

@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "drafts")
 data class DraftEntity(
     @PrimaryKey val id: String,
+    val uid: String,
     val planName: String,
     val selectedDateMillis: Long,
     val selectedHour: Int,
