@@ -2,6 +2,7 @@ package com.example.plansync.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Trace
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -490,7 +491,10 @@ private fun ParticipantsSection(participants: List<Participant>, onInvite: () ->
 @Composable
 private fun ParticipantAvatar(participant: Participant) {
     val bgColor = remember(participant.avatarColorIndex) {
-        avatarColors.getOrElse(participant.avatarColorIndex) { CoralLight }
+        Trace.beginSection("ParticipantAvatar.colors")
+        val c = avatarColors.getOrElse(participant.avatarColorIndex) { CoralLight }
+        Trace.endSection()
+        c
     }
     val textColor = remember(participant.avatarColorIndex) {
         if (participant.avatarColorIndex <= 1) Color.White else Color(0xFF444444)

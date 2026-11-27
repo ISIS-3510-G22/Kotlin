@@ -16,6 +16,7 @@ import com.example.plansync.service.LocationService
 import com.example.plansync.service.NetworkMonitor
 import com.example.plansync.service.OfflineSyncService
 import com.google.firebase.Timestamp
+import android.os.Trace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -194,6 +195,7 @@ class CreatePlanViewModel(
         if (s.isSaved) return
         if (s.planName.isBlank() && lastStepLogged == 0) return
         viewModelScope.launch {
+            Trace.beginSection("CreatePlan.saveDraft")
             draftRepository.save(
                 PlanDraftRepository.Draft(
                     id                  = currentDraftId,
@@ -210,6 +212,7 @@ class CreatePlanViewModel(
                     lastStep            = lastStepLogged
                 )
             )
+            Trace.endSection()
         }
     }
 
