@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
+import com.example.plansync.ui.ForgotPasswordScreen
 import com.example.plansync.ui.LoginScreen
 import com.example.plansync.ui.QueuedActionsBanner
 import com.example.plansync.ui.SignUpScreen
@@ -75,15 +76,20 @@ class MainActivity : ComponentActivity() {
 
                 var isLoggedIn by remember { mutableStateOf(FirebaseProvider.auth.currentUser != null) }
                 var isSigningUp by remember { mutableStateOf(false) }
+                var isResettingPassword by remember { mutableStateOf(false) }
 
                 when {
                     isSigningUp -> SignUpScreen(
                         onProfileCreated = { isLoggedIn = true; isSigningUp = false },
                         onCancel = { isSigningUp = false }
                     )
+                    !isLoggedIn && isResettingPassword -> ForgotPasswordScreen(
+                        onBack = { isResettingPassword = false }
+                    )
                     !isLoggedIn -> LoginScreen(
                         onLoginSuccess = { isLoggedIn = true },
-                        onSignUpClick = { isSigningUp = true }
+                        onSignUpClick = { isSigningUp = true },
+                        onForgotPasswordClick = { isResettingPassword = true }
                     )
                     else -> {
                         val navController = rememberNavController()
