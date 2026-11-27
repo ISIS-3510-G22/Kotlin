@@ -322,8 +322,28 @@ class CreatePlanViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        if (!_uiState.value.isSaved && lastStepLogged > 0) {
-            val s = _uiState.value
+        val s = _uiState.value
+        if (!s.isSaved && saveDraftJob?.isActive == true &&
+            (s.planName.isNotBlank() || lastStepLogged > 0)) {
+            saveDraftJob?.cancel()
+            draftRepository.saveNow(
+                PlanDraftRepository.Draft(
+                    id                  = currentDraftId,
+                    planName            = s.planName,
+                    selectedDateMillis  = s.selectedDateMillis,
+                    selectedHour        = s.selectedHour,
+                    selectedMinute      = s.selectedMinute,
+                    locationText        = s.locationText,
+                    participantCount    = s.participantCount,
+                    isPublic            = s.isPublic,
+                    selectedActivityIds = s.selectedActivities.map { it.id },
+                    origin              = s.origin,
+                    sourceId            = s.sourceId,
+                    lastStep            = lastStepLogged
+                )
+            )
+        }
+        if (!s.isSaved && lastStepLogged > 0) {
             analyticsRepository.logEvent(
                 type          = AnalyticsRepository.CREATE_PLAN_ABANDONED,
                 step          = lastStepLogged,
