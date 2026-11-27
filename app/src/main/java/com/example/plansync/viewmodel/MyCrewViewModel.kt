@@ -249,6 +249,11 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
             }
             preferences.saveGroupInvitesCount(invites.size).onFailure { showSaveError(it) }
         }
+        result?.onFailure { error ->
+            withContext(Dispatchers.Main) {
+                _uiState.update { it.copy(groupInvitesCountError = error.message) }
+            }
+        }
     }
 
     private suspend fun loadFriendRequestsCount() {
@@ -258,6 +263,11 @@ class MyCrewViewModel(application: Application) : AndroidViewModel(application) 
                 _uiState.update { it.copy(friendRequestsCount = requests.size) }
             }
             preferences.saveFriendRequestsCount(requests.size).onFailure { showSaveError(it) }
+        }
+        result?.onFailure { error ->
+            withContext(Dispatchers.Main) {
+                _uiState.update { it.copy(friendRequestsCountError = error.message) }
+            }
         }
     }
 
