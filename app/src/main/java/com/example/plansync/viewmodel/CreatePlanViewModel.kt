@@ -190,8 +190,10 @@ class CreatePlanViewModel(
     }
 
     private fun saveDraft() {
+        val s = _uiState.value
+        if (s.isSaved) return
+        if (s.planName.isBlank() && lastStepLogged == 0) return
         viewModelScope.launch {
-            val s = _uiState.value
             draftRepository.save(
                 PlanDraftRepository.Draft(
                     id                  = currentDraftId,
@@ -360,7 +362,7 @@ class CreatePlanViewModel(
                     )
                 )
                 draftRepository.delete(currentDraftId)
-                _uiState.update { it.copy(isLoading = false, pendingSync = true) }
+                _uiState.update { it.copy(isLoading = false, isSaved = true, pendingSync = true) }
                 return@launch
             }
 
