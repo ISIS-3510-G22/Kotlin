@@ -102,9 +102,8 @@ fun CreatePlanScreen(
 
     val recommended = remember(uiState.recommendedActivities, uiState.selectedActivities) {
         Trace.beginSection("CreatePlan.recommendedFilter")
-        val result = uiState.recommendedActivities.filter { rec ->
-            uiState.selectedActivities.none { it.id == rec.id }
-        }
+        val selectedIds = uiState.selectedActivities.mapTo(HashSet()) { it.id }
+        val result = uiState.recommendedActivities.filter { it.id !in selectedIds }
         Trace.endSection()
         result
     }
