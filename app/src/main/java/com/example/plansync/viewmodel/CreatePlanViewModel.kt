@@ -2,6 +2,7 @@ package com.example.plansync.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.ActivityRepository
 import com.example.plansync.data.AnalyticsRepository
@@ -31,7 +32,13 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 
-class CreatePlanViewModel(application: Application) : AndroidViewModel(application) {
+class CreatePlanViewModel(
+    application: Application,
+    savedStateHandle: SavedStateHandle
+) : AndroidViewModel(application) {
+
+    // draftId is populated by Navigation Compose from the route argument.
+    private val initialDraftId: String? = savedStateHandle["draftId"]
 
     private val planRepository      = PlanRepository()
     private val activityRepository  = ActivityRepository()
@@ -52,6 +59,7 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         val selectedMinute: Int = 0,
         val locationText: String = "",
         val participantCount: Int = 1,
+        val participantText: String = "",
         val isPublic: Boolean = false,
         val availableActivities: List<Activity> = emptyList(),
         val recommendedActivities: List<Activity> = emptyList(),
@@ -97,7 +105,8 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
     init {
         loadAvailableActivities()
         loadRecommendedActivities()
-        loadDraft()
+        // Resume a specific draft when navigated here from My Drafts; otherwise start fresh.
+        if (initialDraftId != null) resumeDraft(initialDraftId)
         loadPopularDays()
         networkMonitor.isOnline
             .onEach { online -> _uiState.update { it.copy(isOnline = online) } }
@@ -149,15 +158,6 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    private fun loadDraft() {
-        viewModelScope.launch {
-            val draft = draftRepository.loadLatest() ?: return@launch
-            if (draft.planName.isBlank() && draft.selectedDateMillis == null) return@launch
-            currentDraftId = draft.id
-            applyDraft(draft)
-        }
-    }
-
     fun resumeDraft(draftId: String) {
         viewModelScope.launch {
             val draft = draftRepository.loadById(draftId) ?: return@launch
@@ -167,6 +167,7 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private suspend fun applyDraft(draft: PlanDraftRepository.Draft) {
+        lastStepLogged = draft.lastStep
         val activityIds = draft.selectedActivityIds.toSet()
         val matched = activityRepository.getActivities()
             .getOrDefault(emptyList())
@@ -179,6 +180,7 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
                 selectedMinute     = draft.selectedMinute,
                 locationText       = draft.locationText,
                 participantCount   = draft.participantCount,
+                participantText    = if (draft.participantCount <= 1) "" else draft.participantCount.toString(),
                 isPublic           = draft.isPublic,
                 selectedActivities = matched,
                 origin             = draft.origin,
@@ -241,8 +243,10 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         saveDraft()
     }
 
-    fun onParticipantCountChange(count: Int) {
-        _uiState.update { it.copy(participantCount = count.coerceAtLeast(1)) }
+    fun onParticipantCountChange(text: String) {
+        val digits = text.filter(Char::isDigit)
+        val count  = digits.toIntOrNull() ?: 0
+        _uiState.update { it.copy(participantText = digits, participantCount = count.coerceAtLeast(1)) }
         saveDraft()
     }
 

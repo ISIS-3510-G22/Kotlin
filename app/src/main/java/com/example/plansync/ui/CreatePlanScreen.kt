@@ -93,7 +93,6 @@ fun CreatePlanScreen(
     preselectedActivityId: String? = null,
     origin: String? = null,
     sourceId: String? = null,
-    draftId: String? = null,
     onBack: () -> Unit = {},
     onSaved: () -> Unit = {},
     onDrafts: () -> Unit = {}
@@ -112,10 +111,6 @@ fun CreatePlanScreen(
 
     LaunchedEffect(origin, sourceId) {
         viewModel.setOrigin(origin, sourceId)
-    }
-
-    LaunchedEffect(draftId) {
-        if (draftId != null) viewModel.resumeDraft(draftId)
     }
 
     LaunchedEffect(uiState.isSaved) {
@@ -343,9 +338,9 @@ fun CreatePlanScreen(
                 FormSectionLabel("PARTICIPANTS")
                 Spacer(Modifier.height(6.dp))
                 FormTextField(
-                    value = uiState.participantCount.toString(),
-                    onValueChange = { viewModel.onParticipantCountChange(it.filter(Char::isDigit).toIntOrNull() ?: 1) },
-                    placeholder = "Number of people",
+                    value = uiState.participantText,
+                    onValueChange = viewModel::onParticipantCountChange,
+                    placeholder = "1",
                     keyboardType = KeyboardType.Number
                 )
             }

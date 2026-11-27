@@ -292,12 +292,10 @@ fun MainNavHost(
             val activityId = backStackEntry.arguments?.getString("activityId")
             val origin     = backStackEntry.arguments?.getString("origin")
             val sourceId   = backStackEntry.arguments?.getString("sourceId")
-            val draftId    = backStackEntry.arguments?.getString("draftId")
             CreatePlanScreen(
                 preselectedActivityId = activityId,
                 origin                = origin,
                 sourceId              = sourceId,
-                draftId               = draftId,
                 onBack    = { navController.popBackStack() },
                 onSaved   = { navController.popBackStack() },
                 onDrafts  = { navController.navigate(Routes.MY_DRAFTS) }
