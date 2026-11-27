@@ -57,7 +57,15 @@ fun MyDebtsScreen(
 
     Scaffold(
         containerColor = Color(0xFFF5F5F5),
-        topBar = { BackTopBar(title = "My Debts", onBack = onBack) },
+        topBar = {
+            Column {
+                BackTopBar(title = "My Debts", onBack = onBack)
+                OfflineBanner(
+                    isOnline = uiState.isOnline,
+                    message = "You're offline. Showing debts saved on your phone, payments will sync when you reconnect."
+                )
+            }
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         Box(

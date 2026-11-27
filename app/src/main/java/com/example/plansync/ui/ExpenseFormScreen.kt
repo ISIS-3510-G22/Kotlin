@@ -66,7 +66,13 @@ fun ExpenseFormScreen(
     Scaffold(
         containerColor = Color(0xFFF8F8F8),
         topBar = {
-            BackTopBar(title = if (uiState.isEditing) "Edit Expense" else "New Expense", onBack = onBack)
+            Column {
+                BackTopBar(title = if (uiState.isEditing) "Edit Expense" else "New Expense", onBack = onBack)
+                OfflineBanner(
+                    isOnline = uiState.isOnline,
+                    message = "You're offline. This expense will be saved on your phone and synced when you reconnect."
+                )
+            }
         },
         bottomBar = {
             Row(

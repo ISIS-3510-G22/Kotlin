@@ -7,12 +7,16 @@ import com.example.plansync.data.InviteRepository
 import com.example.plansync.data.PendingActionRepository
 import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.ProfileRepository
+import com.example.plansync.data.SplitRepository
 import com.example.plansync.data.WriteResult
 import com.example.plansync.data.planDateTime
 import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
+import com.example.plansync.model.Expense
 import com.example.plansync.model.PendingAction
+import com.example.plansync.model.Settlement
 import com.example.plansync.model.User
+import java.util.Date
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +39,7 @@ object OfflineSyncService {
     private val profileRepository = ProfileRepository()
     private val planRepository = PlanRepository()
     private val inviteRepository = InviteRepository()
+    private val splitRepository = SplitRepository()
     private lateinit var locationService: LocationService
     private lateinit var appContext: Context
     private val mutex = Mutex()
@@ -90,6 +95,11 @@ object OfflineSyncService {
         is PendingAction.DeletePaymentMethod -> "Your payment method removal"
         is PendingAction.SetRsvp             -> "Your RSVP"
         is PendingAction.SendInvite          -> "Your invite"
+        is PendingAction.AddExpense          -> "Your expense \"${action.name}\""
+        is PendingAction.UpdateExpense       -> "Your changes to \"${action.name}\""
+        is PendingAction.DeleteExpense       -> "Your expense deletion"
+        is PendingAction.AddSettlement       -> "Your payment"
+        is PendingAction.DeleteMySettlementsTo -> "Your payment change"
     }
 
     suspend fun saveActivityOffline(action: PendingAction.SaveActivity) {
@@ -138,6 +148,69 @@ object OfflineSyncService {
     }
 
     suspend fun enqueue(action: PendingAction) = queue(action)
+
+    fun isOnlineNow(): Boolean = NetworkMonitor.get(appContext).isCurrentlyOnline()
+
+    suspend fun deleteExpenseOffline(planId: String, expenseId: String) {
+        val related = pendingActions.getAll().filter {
+            (it is PendingAction.AddExpense && it.expenseId == expenseId) ||
+                (it is PendingAction.UpdateExpense && it.expenseId == expenseId)
+        }
+        val neverUploaded = related.any { it is PendingAction.AddExpense }
+        related.forEach { pendingActions.remove(it.id) }
+        if (!neverUploaded) queue(PendingAction.DeleteExpense(planId, expenseId))
+    }
+
+    suspend fun loadExpenses(planId: String): Result<List<Expense>> {
+        val actions = pendingActions.getAll()
+        val base = splitRepository.getExpenses(planId)
+        val hasPendingAdds = actions.any { it is PendingAction.AddExpense && it.planId == planId }
+        val expenses = base.getOrElse { if (hasPendingAdds) emptyList() else return base }
+
+        val result = LinkedHashMap(expenses.associateBy { it.id })
+        actions.forEach { action ->
+            when (action) {
+                is PendingAction.AddExpense -> if (action.planId == planId) {
+                    result[action.expenseId] = Expense(
+                        id = action.expenseId,
+                        name = action.name,
+                        value = action.value,
+                        paidById = action.paidById,
+                        splitAmongIds = action.splitAmongIds,
+                        createdAt = Date(action.createdAtMillis)
+                    )
+                }
+                is PendingAction.UpdateExpense -> if (action.planId == planId) {
+                    result[action.expenseId]?.let {
+                        result[it.id] = it.copy(name = action.name, value = action.value, paidById = action.paidById)
+                    }
+                }
+                is PendingAction.DeleteExpense -> if (action.planId == planId) result.remove(action.expenseId)
+                else -> Unit
+            }
+        }
+        return Result.success(result.values.toList())
+    }
+
+    suspend fun loadSettlements(planId: String): Result<List<Settlement>> {
+        val actions = pendingActions.getAll()
+        val base = splitRepository.getSettlements(planId)
+        val hasPending = actions.any { it is PendingAction.AddSettlement && it.planId == planId }
+        val settlements = base.getOrElse { if (hasPending) emptyList() else return base }.toMutableList()
+
+        actions.forEach { action ->
+            when (action) {
+                is PendingAction.AddSettlement -> if (action.planId == planId) {
+                    settlements.add(Settlement(action.id, action.fromId, action.toId, action.amount))
+                }
+                is PendingAction.DeleteMySettlementsTo -> if (action.planId == planId) {
+                    settlements.removeAll { it.fromId == action.fromId && it.toId == action.toId }
+                }
+                else -> Unit
+            }
+        }
+        return Result.success(settlements)
+    }
 
     suspend fun hasPendingActions(): Boolean = pendingActions.getAll().isNotEmpty()
 
@@ -224,6 +297,27 @@ object OfflineSyncService {
         }
         is PendingAction.SendInvite ->
             inviteRepository.inviteContact(action.planId, action.contactId).isSuccess
+        is PendingAction.AddExpense -> {
+            val result = splitRepository.addExpense(
+                planId = action.planId,
+                expenseId = action.expenseId,
+                name = action.name,
+                value = action.value,
+                paidById = action.paidById,
+                splitAmongIds = action.splitAmongIds,
+                createdAt = Date(action.createdAtMillis)
+            )
+            if (result.isSuccess) analyticsRepository.logEvent(AnalyticsRepository.EXPENSE_ADDED, action.planId)
+            result.isSuccess
+        }
+        is PendingAction.UpdateExpense ->
+            splitRepository.updateExpense(action.planId, action.expenseId, action.name, action.value, action.paidById).isSuccess
+        is PendingAction.DeleteExpense ->
+            splitRepository.deleteExpense(action.planId, action.expenseId).isSuccess
+        is PendingAction.AddSettlement ->
+            splitRepository.addSettlement(action.planId, action.toId, action.amount).isSuccess
+        is PendingAction.DeleteMySettlementsTo ->
+            splitRepository.deleteMySettlementsTo(action.planId, action.toId).isSuccess
         is PendingAction.CreatePlan -> {
             val date = planDateTime(action.dateMillis, action.hour, action.minute)
             val result = planRepository.createPlan(
@@ -253,6 +347,8 @@ object OfflineSyncService {
         is PendingAction.SendInvite   -> "Invite for plan ${action.planId}"
         is PendingAction.SetRsvp      -> "RSVP for plan ${action.planId}"
         is PendingAction.SaveActivity -> "Activity \"${action.name}\""
+        is PendingAction.AddExpense   -> "Expense \"${action.name}\""
+        is PendingAction.AddSettlement -> "Payment"
         else                          -> "queued action"
     }
 

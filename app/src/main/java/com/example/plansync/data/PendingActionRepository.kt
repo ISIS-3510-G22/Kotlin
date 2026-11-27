@@ -77,6 +77,37 @@ class PendingActionRepository(
                 .put("type", "send_invite")
                 .put("planId", planId)
                 .put("contactId", contactId)
+            is PendingAction.AddExpense -> json
+                .put("type", "add_expense")
+                .put("planId", planId)
+                .put("expenseId", expenseId)
+                .put("name", name)
+                .put("value", value)
+                .put("paidById", paidById)
+                .put("splitAmongIds", JSONArray(splitAmongIds))
+                .put("createdAtMillis", createdAtMillis)
+            is PendingAction.UpdateExpense -> json
+                .put("type", "update_expense")
+                .put("planId", planId)
+                .put("expenseId", expenseId)
+                .put("name", name)
+                .put("value", value)
+                .put("paidById", paidById)
+            is PendingAction.DeleteExpense -> json
+                .put("type", "delete_expense")
+                .put("planId", planId)
+                .put("expenseId", expenseId)
+            is PendingAction.AddSettlement -> json
+                .put("type", "add_settlement")
+                .put("planId", planId)
+                .put("fromId", fromId)
+                .put("toId", toId)
+                .put("amount", amount)
+            is PendingAction.DeleteMySettlementsTo -> json
+                .put("type", "delete_my_settlements_to")
+                .put("planId", planId)
+                .put("fromId", fromId)
+                .put("toId", toId)
             is PendingAction.CreatePlan -> json
                 .put("type", "create_plan")
                 .put("planId", planId)
@@ -143,6 +174,42 @@ class PendingActionRepository(
             )
             "delete_payment_method" -> PendingAction.DeletePaymentMethod(
                 method = getJSONObject("method").toPaymentMethod(),
+                id = id
+            )
+            "add_expense" -> PendingAction.AddExpense(
+                planId = getString("planId"),
+                expenseId = getString("expenseId"),
+                name = getString("name"),
+                value = getDouble("value"),
+                paidById = getString("paidById"),
+                splitAmongIds = getJSONArray("splitAmongIds").toStringList(),
+                createdAtMillis = getLong("createdAtMillis"),
+                id = id
+            )
+            "update_expense" -> PendingAction.UpdateExpense(
+                planId = getString("planId"),
+                expenseId = getString("expenseId"),
+                name = getString("name"),
+                value = getDouble("value"),
+                paidById = getString("paidById"),
+                id = id
+            )
+            "delete_expense" -> PendingAction.DeleteExpense(
+                planId = getString("planId"),
+                expenseId = getString("expenseId"),
+                id = id
+            )
+            "add_settlement" -> PendingAction.AddSettlement(
+                planId = getString("planId"),
+                fromId = getString("fromId"),
+                toId = getString("toId"),
+                amount = getDouble("amount"),
+                id = id
+            )
+            "delete_my_settlements_to" -> PendingAction.DeleteMySettlementsTo(
+                planId = getString("planId"),
+                fromId = getString("fromId"),
+                toId = getString("toId"),
                 id = id
             )
             else -> PendingAction.CreatePlan(
