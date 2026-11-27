@@ -121,6 +121,11 @@ sealed class PendingAction {
         val planId: String,
         val activityId: String,
         val activityName: String,
+        val activityCategory: String = "",
+        val activityDescription: String = "",
+        val activityAddress: String = "",
+        val activityIconType: String = "DEFAULT",
+        val activityPrice: Int = 0,
         val tags: List<String>,
         override val id: String = UUID.randomUUID().toString()
     ) : PendingAction()

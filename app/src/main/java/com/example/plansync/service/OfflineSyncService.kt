@@ -157,6 +157,18 @@ object OfflineSyncService {
         queue(action)
         val plans = planSnapshots.getPlans().getOrNull() ?: return
         planSnapshots.savePlans(plans.map { it.withActivity(action.planId, action.activityId) })
+        // Also write to Room so Plan Detail shows the activity immediately offline.
+        val entity = com.example.plansync.data.PlanActivityEntity(
+            planId      = action.planId,
+            id          = action.activityId,
+            name        = action.activityName,
+            category    = action.activityCategory,
+            description = action.activityDescription,
+            address     = action.activityAddress,
+            iconType    = action.activityIconType,
+            price       = action.activityPrice
+        )
+        com.example.plansync.data.PlanDatabase.get(appContext).planDao().upsertActivities(listOf(entity))
     }
 
     suspend fun loadPlansForAddToPlan(online: Boolean): Result<List<Plan>> {
