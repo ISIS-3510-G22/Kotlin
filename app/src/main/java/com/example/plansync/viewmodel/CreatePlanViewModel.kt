@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -52,6 +54,7 @@ class CreatePlanViewModel(
     private val flowSessionId = UUID.randomUUID().toString()
     private var lastStepLogged = 0
     private var currentDraftId: String = flowSessionId
+    private var saveDraftJob: Job? = null
 
     data class UiState(
         val planName: String = "",
@@ -191,10 +194,14 @@ class CreatePlanViewModel(
     }
 
     private fun saveDraft() {
-        val s = _uiState.value
-        if (s.isSaved) return
-        if (s.planName.isBlank() && lastStepLogged == 0) return
-        viewModelScope.launch {
+        val snapshot = _uiState.value
+        if (snapshot.isSaved) return
+        if (snapshot.planName.isBlank() && lastStepLogged == 0) return
+        saveDraftJob?.cancel()
+        saveDraftJob = viewModelScope.launch {
+            delay(400)
+            val s = _uiState.value
+            if (s.isSaved) return@launch
             Trace.beginSection("CreatePlan.saveDraft")
             draftRepository.save(
                 PlanDraftRepository.Draft(
