@@ -57,7 +57,8 @@ import com.example.plansync.viewmodel.LoginViewModel
 fun LoginScreen(
     viewModel: LoginViewModel = viewModel(),
     onLoginSuccess: () -> Unit = {},
-    onSignUpClick: () -> Unit = {}
+    onSignUpClick: () -> Unit = {},
+    onForgotPasswordClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -187,7 +188,7 @@ fun LoginScreen(
 
                 // ── Forgot password ────────────────────────────────────────
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                    TextButton(onClick = { /* TODO: forgot password flow */ }) {
+                    TextButton(onClick = onForgotPasswordClick) {
                         Text(
                             text = "FORGOT PASSWORD?",
                             style = MaterialTheme.typography.labelSmall,
