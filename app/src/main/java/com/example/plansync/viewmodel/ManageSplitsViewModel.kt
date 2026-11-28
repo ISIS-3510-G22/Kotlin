@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 class ManageSplitsViewModel(
@@ -65,11 +66,13 @@ class ManageSplitsViewModel(
                 return@launch
             }
 
-            val expenses = OfflineSyncService.loadExpenses(planId).getOrElse { error ->
+            val expensesJob = async { OfflineSyncService.loadExpenses(planId) }
+            val settlementsJob = async { OfflineSyncService.loadSettlements(planId) }
+            val expenses = expensesJob.await().getOrElse { error ->
                 _uiState.update { it.copy(isLoading = false, errorMessage = loadErrorMessage(error)) }
                 return@launch
             }
-            val settlements = OfflineSyncService.loadSettlements(planId).getOrElse { error ->
+            val settlements = settlementsJob.await().getOrElse { error ->
                 _uiState.update { it.copy(isLoading = false, errorMessage = loadErrorMessage(error)) }
                 return@launch
             }
@@ -77,7 +80,7 @@ class ManageSplitsViewModel(
             val splits = SplitCalculator.buildSplits(myId, expenses, settlements)
             val owedToMe = SplitCalculator.buildOwedToMe(myId, expenses, settlements)
             val names = loadNames(splits + owedToMe)
-            val daysOverdue = SplitCalculator.daysOverdue(planRepository.getPlanDate(planId).getOrNull())
+            val daysOverdue = SplitCalculator.daysOverdue(planRepository.getPlanDate(planId, OfflineSyncService.readSource()).getOrNull())
             _uiState.update {
                 it.copy(
                     isLoading = false,
@@ -140,7 +143,7 @@ class ManageSplitsViewModel(
         val personIds = splits.map { it.personId }.distinct()
         if (personIds.isEmpty()) return emptyMap()
 
-        val users = crewRepository.getUsersByIds(personIds).getOrElse { return emptyMap() }
+        val users = crewRepository.getUsersByIds(personIds, OfflineSyncService.readSource()).getOrElse { return emptyMap() }
         return users.filter { it.name.isNotBlank() }.associate { it.id to it.name }
     }
 
