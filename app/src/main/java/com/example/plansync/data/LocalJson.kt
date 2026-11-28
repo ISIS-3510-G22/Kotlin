@@ -2,7 +2,6 @@ package com.example.plansync.data
 
 import com.example.plansync.model.PaymentMethod
 import com.example.plansync.model.PaymentMethodType
-import com.example.plansync.model.User
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -48,24 +47,3 @@ internal fun JSONObject.toContact(): com.example.plansync.model.Contact =
         isGroup = getBoolean("isGroup"),
         photoUrl = optString("photoUrl")
     )
-
-internal fun User.toJson(): JSONObject = JSONObject()
-    .put("id", id)
-    .put("name", name)
-    .put("email", email)
-    .put("lastName", lastName)
-    .put("username", username)
-    .put("phone", phone)
-    .put("photoUrl", photoUrl)
-    .put("reimbursementMethods", JSONArray(reimbursementMethods.map { it.toJson() }))
-
-internal fun JSONObject.toUser(): User = User(
-    id = getString("id"),
-    name = getString("name"),
-    email = getString("email"),
-    lastName = getString("lastName"),
-    username = getString("username"),
-    phone = getString("phone"),
-    photoUrl = getString("photoUrl"),
-    reimbursementMethods = getJSONArray("reimbursementMethods").toString().toJsonList { it.toPaymentMethod() }
-)

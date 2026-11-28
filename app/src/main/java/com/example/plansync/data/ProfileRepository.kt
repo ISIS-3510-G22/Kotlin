@@ -10,7 +10,10 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 import java.util.UUID
-import org.json.JSONObject
+import com.example.plansync.data.dto.UserDto
+import com.example.plansync.data.dto.toDto
+import com.example.plansync.data.dto.toModel
+import kotlinx.serialization.json.Json
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -20,16 +23,19 @@ class ProfileRepository(
     private val storage: LocalStorageProvider = LocalStorageProvider
 ) {
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     private fun cacheFile(): String? = auth.currentUser?.uid?.let { "profile_$it.json" }
 
     suspend fun getCachedUser(): User? {
         val file = cacheFile() ?: return null
-        return storage.read(file)?.let { JSONObject(it).toUser() }
+        val content = storage.read(file) ?: return null
+        return runCatching { json.decodeFromString<UserDto>(content).toModel() }.getOrNull()
     }
 
     suspend fun cacheUser(user: User) {
         val file = cacheFile() ?: return
-        storage.write(file, user.toJson().toString())
+        storage.write(file, json.encodeToString(user.toDto()))
     }
 
     suspend fun updateProfile(name: String, lastName: String, phone: String): WriteResult {
