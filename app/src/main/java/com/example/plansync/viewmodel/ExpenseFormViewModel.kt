@@ -65,7 +65,10 @@ class ExpenseFormViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, isEditing = expenseId != null, errorMessage = null) }
 
-            val plan = PerfTrace.traced("ExpenseForm.loadParticipants") { planRepository.getPlan(planId) }.getOrElse {
+            val participantIds = PerfTrace.traced("ExpenseForm.loadParticipants") {
+                planRepository.getGoingIds(planId)
+                    .recoverCatching { planRepository.getPlan(planId).getOrThrow().participants.map { it.id } }
+            }.getOrElse {
                 _uiState.update { it.copy(isLoading = false, errorMessage = "Connect to the internet to load this plan.") }
                 return@launch
             }
@@ -77,7 +80,6 @@ class ExpenseFormViewModel(application: Application) : AndroidViewModel(applicat
                     }
             }
 
-            val participantIds = plan.participants.map { it.id }
             original = expense
             splitAmongIds = expense?.splitAmongIds ?: participantIds
             val ids = (participantIds + splitAmongIds + listOfNotNull(expense?.paidById)).distinct()

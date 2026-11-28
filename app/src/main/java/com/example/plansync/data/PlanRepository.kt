@@ -75,6 +75,16 @@ class PlanRepository(
         }
     }
 
+    suspend fun getGoingIds(planId: String): Result<List<String>> = runCatching {
+        val doc = withTimeout(8_000) {
+            PerfTrace.traced("ExpenseForm.firestoreRead") {
+                db.collection("plans").document(planId).get(Source.SERVER).await()
+            }
+        }
+        if (!doc.exists()) throw Exception("Plan not found.")
+        parseInvitations(doc).filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
+    }
+
     suspend fun getPlanDate(planId: String): Result<Date?> = runCatching {
         db.collection("plans").document(planId).get().await().getTimestamp("date")?.toDate()
     }
