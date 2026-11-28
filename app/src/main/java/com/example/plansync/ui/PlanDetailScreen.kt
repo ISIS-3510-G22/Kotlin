@@ -120,7 +120,7 @@ fun PlanDetailScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = Color(0xFFF5F5F5)
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -195,7 +195,7 @@ private fun PlanDetailTopBar(onBack: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -204,7 +204,7 @@ private fun PlanDetailTopBar(onBack: () -> Unit) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
-                tint = Color(0xFF222222)
+                tint = MaterialTheme.colorScheme.onSurface
             )
         }
         Text(
@@ -243,7 +243,7 @@ private fun PlanDetailContent(
 
         item { PlanHeader(plan = plan, onRsvp = onRsvp, onAddActivity = onAddActivity, onExpenses = onExpenses) }
 
-        item { HorizontalDivider(color = Color(0xFFDDDDDD), thickness = 1.dp) }
+        item { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp) }
 
         // Participants row
         item { ParticipantsSection(participants = plan.participants, onInvite = onInvite) }
@@ -280,7 +280,7 @@ private fun PlanHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
         // Title
@@ -321,7 +321,7 @@ private fun PlanHeader(
             Text(
                 text = plan.date,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF444444)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.width(20.dp))
             Icon(
@@ -334,7 +334,7 @@ private fun PlanHeader(
             Text(
                 text = "Est. ${'$'}${plan.estimatedCostPerPerson}/pp",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF444444)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -352,7 +352,7 @@ private fun PlanHeader(
             Text(
                 text = "${plan.activityCount} Activities",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF444444)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -452,7 +452,7 @@ private fun ParticipantsSection(participants: List<Participant>, onInvite: () ->
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFFF5F5F5))
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
         Text(
@@ -472,8 +472,8 @@ private fun ParticipantsSection(participants: List<Participant>, onInvite: () ->
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White)
-                    .border(1.5.dp, Color(0xFFCCCCCC), RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                     .clickable { onInvite() },
                 contentAlignment = Alignment.Center
             ) {
@@ -572,7 +572,7 @@ private fun ActivityTimelineItem(activity: Activity, isLast: Boolean) {
                     modifier = Modifier
                         .width(2.dp)
                         .weight(1f)
-                        .background(Color(0xFFDDDDDD))
+                        .background(MaterialTheme.colorScheme.outlineVariant)
                 )
             }
         }
@@ -585,7 +585,7 @@ private fun ActivityTimelineItem(activity: Activity, isLast: Boolean) {
                 .fillMaxWidth()
                 .padding(bottom = if (isLast) 0.dp else 8.dp),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -610,7 +610,7 @@ private fun ActivityTimelineItem(activity: Activity, isLast: Boolean) {
                 Text(
                     text = activity.description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF666666)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))

@@ -91,7 +91,7 @@ fun MyDebtsScreen(
                 uiState.debts.isEmpty() -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = "You're all settled up 🎉",
+                            text = "You're all settled up",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFF888888)
                         )
