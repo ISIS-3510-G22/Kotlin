@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class EditProfileViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -46,6 +47,8 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    private var loadedPhone = ""
+
     fun load() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
@@ -55,6 +58,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
                 null
             }
             val user = (fromNetwork ?: profileRepository.getCachedUser())?.let { OfflineSyncService.applyPending(it) }
+            loadedPhone = user?.phone.orEmpty()
             _uiState.update {
                 it.copy(
                     isLoading = false,
@@ -122,7 +126,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
             _uiState.update { it.copy(errorMessage = "Please enter your name.") }
             return
         }
-        if (current.phone.length != SignUpViewModel.PHONE_LENGTH) {
+        if (current.phone != loadedPhone && current.phone.length != SignUpViewModel.PHONE_LENGTH) {
             _uiState.update { it.copy(errorMessage = "Phone number must have ${SignUpViewModel.PHONE_LENGTH} digits.") }
             return
         }
@@ -130,8 +134,13 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, errorMessage = null) }
             val result = if (current.isOnline) {
-                OfflineSyncService.syncNow()
-                profileRepository.updateProfile(name = name, lastName = lastName, phone = current.phone)
+                withTimeoutOrNull(SAVE_TIMEOUT_MS) {
+                    OfflineSyncService.syncNow()
+                    profileRepository.updateProfile(name = name, lastName = lastName, phone = current.phone)
+                } ?: run {
+                    OfflineSyncService.enqueue(PendingAction.UpdateProfile(name, lastName, current.phone))
+                    WriteResult.Queued
+                }
             } else {
                 OfflineSyncService.enqueue(PendingAction.UpdateProfile(name, lastName, current.phone))
                 WriteResult.Queued
@@ -149,4 +158,8 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
     fun onSaveHandled() = _uiState.update { it.copy(didSave = false, savedOffline = false) }
 
     fun onErrorShown() = _uiState.update { it.copy(errorMessage = null) }
+
+    companion object {
+        private const val SAVE_TIMEOUT_MS = 8_000L
+    }
 }
