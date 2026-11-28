@@ -26,7 +26,11 @@ private val DarkColorScheme = darkColorScheme(
     primary = CoralLight,
     onPrimary = Color(0xFF1C1B1F),
     secondary = Coral,
-    onSecondary = Color.White
+    onSecondary = Color.White,
+    background = Color(0xFF121212),
+    onBackground = Color(0xFFE6E1E5),
+    surface = Color(0xFF1E1E1E),
+    onSurface = Color(0xFFE6E1E5)
 )
 
 @Composable
