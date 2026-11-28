@@ -81,7 +81,7 @@ class MyDebtsViewModel(
             }
 
             val creditorIds = planSplits.flatMap { (_, splits) -> splits.map { it.personId } }
-            val names = crewRepository.getUsersByIds(creditorIds)
+            val names = crewRepository.getUsersByIds(creditorIds, OfflineSyncService.readSource())
                 .getOrDefault(emptyList())
                 .associate { it.id to it.fullName }
 

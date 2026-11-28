@@ -83,7 +83,7 @@ class ExpenseFormViewModel(application: Application) : AndroidViewModel(applicat
             original = expense
             splitAmongIds = expense?.splitAmongIds ?: participantIds
             val ids = (participantIds + splitAmongIds + listOfNotNull(expense?.paidById)).distinct()
-            val people = crewRepository.getUsersByIds(ids)
+            val people = crewRepository.getUsersByIds(ids, OfflineSyncService.readSource())
                 .getOrDefault(emptyList())
                 .map { Person(it.id, it.fullName.ifBlank { it.email }) }
                 .sortedBy { it.name.lowercase() }

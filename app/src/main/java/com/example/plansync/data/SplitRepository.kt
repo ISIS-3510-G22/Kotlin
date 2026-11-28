@@ -23,9 +23,9 @@ class SplitRepository(
 
     val currentUserId: String? get() = auth.currentUser?.uid
 
-    suspend fun getExpenses(planId: String): Result<List<Expense>> {
+    suspend fun getExpenses(planId: String, online: Boolean = true): Result<List<Expense>> {
         SplitMemoryCache.getExpenses(planId)?.let { return Result.success(it) }
-        val fresh = runCatching {
+        val fresh = if (!online) null else runCatching {
             withTimeout(8_000) {
                 plans.document(planId).collection("expenses").get(Source.SERVER).await()
                     .documents.map { it.toExpense() }
@@ -87,9 +87,9 @@ class SplitRepository(
         Unit
     }.also { SplitMemoryCache.invalidate(planId) }
 
-    suspend fun getSettlements(planId: String): Result<List<Settlement>> {
+    suspend fun getSettlements(planId: String, online: Boolean = true): Result<List<Settlement>> {
         SplitMemoryCache.getSettlements(planId)?.let { return Result.success(it) }
-        val fresh = runCatching {
+        val fresh = if (!online) null else runCatching {
             withTimeout(8_000) {
                 plans.document(planId).collection("settlements").get(Source.SERVER).await()
                     .documents.map { it.toSettlement() }

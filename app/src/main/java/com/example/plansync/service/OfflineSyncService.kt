@@ -18,6 +18,7 @@ import com.example.plansync.model.PendingAction
 import com.example.plansync.model.Plan
 import com.example.plansync.model.Settlement
 import com.example.plansync.model.User
+import com.google.firebase.firestore.Source
 import java.util.Date
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -184,6 +185,8 @@ object OfflineSyncService {
 
     fun isOnlineNow(): Boolean = NetworkMonitor.get(appContext).isCurrentlyOnline()
 
+    fun readSource(): Source = if (isOnlineNow()) Source.DEFAULT else Source.CACHE
+
     suspend fun deleteExpenseOffline(planId: String, expenseId: String) {
         val related = pendingActions.getAll().filter {
             (it is PendingAction.AddExpense && it.expenseId == expenseId) ||
@@ -196,7 +199,7 @@ object OfflineSyncService {
 
     suspend fun loadExpenses(planId: String): Result<List<Expense>> {
         val actions = pendingActions.getAll()
-        val base = splitRepository.getExpenses(planId)
+        val base = splitRepository.getExpenses(planId, isOnlineNow())
         val hasPendingAdds = actions.any { it is PendingAction.AddExpense && it.planId == planId }
         val expenses = base.getOrElse { if (hasPendingAdds) emptyList() else return base }
 
@@ -228,7 +231,7 @@ object OfflineSyncService {
 
     suspend fun loadSettlements(planId: String): Result<List<Settlement>> {
         val actions = pendingActions.getAll()
-        val base = splitRepository.getSettlements(planId)
+        val base = splitRepository.getSettlements(planId, isOnlineNow())
         val hasPending = actions.any { it is PendingAction.AddSettlement && it.planId == planId }
         val settlements = base.getOrElse { if (hasPending) emptyList() else return base }.toMutableList()
 
