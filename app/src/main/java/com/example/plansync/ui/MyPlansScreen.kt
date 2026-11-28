@@ -1,5 +1,10 @@
 package com.example.plansync.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.Warning
+import com.example.plansync.ui.theme.CoralLight
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -181,6 +186,12 @@ fun MyPlansScreen(
                             PlanCard(
                                 plan = plan,
                                 rainChance = rainChanceFor(plan, uiState.rainForecast),
+                                hasOverduePayments = plan.id in uiState.overduePlanIds,
+                                inviteWaitText = if (plan.status == PlanStatus.PENDING_INVITE) {
+                                    uiState.inviteWaitDays[plan.id]?.let { inviteWaitLabel(it) }
+                                } else {
+                                    null
+                                },
                                 onClick = {
                                     if (plan.status == PlanStatus.PENDING_INVITE) {
                                         viewModel.onInviteTapped(plan)
@@ -319,6 +330,8 @@ private fun EmptyPlansMessage(tab: PlanStatus) {
 private fun PlanCard(
     plan: Plan,
     rainChance: Int? = null,
+    hasOverduePayments: Boolean = false,
+    inviteWaitText: String? = null,
     onClick: () -> Unit = {},
     onLeaveReview: () -> Unit = {},
     onManageSplits: () -> Unit = {},
@@ -363,9 +376,42 @@ private fun PlanCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF888888)
                     )
+                    if (inviteWaitText != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = inviteWaitText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Coral,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 ParticipantAvatarRow(participants = plan.participants)
+            }
+
+            if (hasOverduePayments) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .background(CoralLight, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Coral,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Overdue payments · more than 3 days unpaid",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Coral,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
 
             if (plan.status == PlanStatus.PAST) {
@@ -412,16 +458,22 @@ private fun PlanCard(
     }
 }
 
+private fun inviteWaitLabel(days: Int): String = when (days) {
+    0 -> "Invited today - no answer yet"
+    1 -> "Invited 1 day ago - no answer yet"
+    else -> "Invited $days days ago - no answer yet"
+}
+
 private fun planDateText(plan: Plan): String {
     val dateTime = plan.dateTime ?: return plan.date
-    val pattern = if (plan.status == PlanStatus.PAST) "MMM d · h:mm a" else "MMM d"
-    return SimpleDateFormat(pattern, Locale.US).format(dateTime)
+    val format = if (plan.status == PlanStatus.PAST) pastDateFormat else upcomingDateFormat
+    return format.format(dateTime)
 }
 
 private fun rainChanceFor(plan: Plan, forecast: Map<String, Int>): Int? {
     if (plan.status != PlanStatus.CONFIRMED) return null
     val dateTime = plan.dateTime ?: return null
-    return forecast[SimpleDateFormat("yyyy-MM-dd", Locale.US).format(dateTime)]
+    return forecast[dayKeyFormat.format(dateTime)]
 }
 
 private fun reviewCountLabel(count: Int): String = if (count == 1) "1 review" else "$count reviews"
@@ -438,6 +490,12 @@ private val avatarColors = listOf(
 )
 
 private const val MAX_AVATARS_SHOWN = 3
+
+private val pastDateFormat = SimpleDateFormat("MMM d · h:mm a", Locale.US)
+
+private val upcomingDateFormat = SimpleDateFormat("MMM d", Locale.US)
+
+private val dayKeyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
 @Composable
 private fun ParticipantAvatarRow(participants: List<Participant>) {

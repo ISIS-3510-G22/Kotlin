@@ -2,6 +2,7 @@ package com.example.plansync.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Trace
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -75,6 +76,7 @@ import com.example.plansync.model.Activity
 import com.example.plansync.model.ActivityIcon
 import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
+import com.example.plansync.model.PlanStatus
 import com.example.plansync.ui.theme.Coral
 import com.example.plansync.ui.theme.CoralLight
 import com.example.plansync.viewmodel.PlanDetailViewModel
@@ -97,7 +99,8 @@ fun PlanDetailScreen(
     viewModel: PlanDetailViewModel = viewModel(),
     onBack: () -> Unit = {},
     onInvite: (String) -> Unit = {},
-    onAddActivity: () -> Unit = {}
+    onAddActivity: () -> Unit = {},
+    onExpenses: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -117,7 +120,7 @@ fun PlanDetailScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = Color(0xFFF5F5F5)
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -149,7 +152,8 @@ fun PlanDetailScreen(
                         plan = uiState.plan!!,
                         onInvite = { onInvite(planId) },
                         onRsvp = { viewModel.onRsvpTriggered() },
-                        onAddActivity = onAddActivity
+                        onAddActivity = onAddActivity,
+                        onExpenses = { onExpenses(planId) }
                     )
                 }
                 uiState.errorMessage != null -> {
@@ -191,7 +195,7 @@ private fun PlanDetailTopBar(onBack: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -200,7 +204,7 @@ private fun PlanDetailTopBar(onBack: () -> Unit) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
-                tint = Color(0xFF222222)
+                tint = MaterialTheme.colorScheme.onSurface
             )
         }
         Text(
@@ -216,7 +220,13 @@ private fun PlanDetailTopBar(onBack: () -> Unit) {
 // ── Scrollable plan content ────────────────────────────────────────────────────
 
 @Composable
-private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () -> Unit = {}, onAddActivity: () -> Unit = {}) {
+private fun PlanDetailContent(
+    plan: Plan,
+    onInvite: () -> Unit = {},
+    onRsvp: () -> Unit = {},
+    onAddActivity: () -> Unit = {},
+    onExpenses: () -> Unit = {}
+) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
 
         // Header: title, date, cost, activity count, action buttons
@@ -231,9 +241,9 @@ private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () 
             )
         }
 
-        item { PlanHeader(plan = plan, onRsvp = onRsvp, onAddActivity = onAddActivity) }
+        item { PlanHeader(plan = plan, onRsvp = onRsvp, onAddActivity = onAddActivity, onExpenses = onExpenses) }
 
-        item { HorizontalDivider(color = Color(0xFFDDDDDD), thickness = 1.dp) }
+        item { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp) }
 
         // Participants row
         item { ParticipantsSection(participants = plan.participants, onInvite = onInvite) }
@@ -253,7 +263,12 @@ private fun PlanDetailContent(plan: Plan, onInvite: () -> Unit = {}, onRsvp: () 
 // ── Plan header ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () -> Unit = {}) {
+private fun PlanHeader(
+    plan: Plan,
+    onRsvp: () -> Unit = {},
+    onAddActivity: () -> Unit = {},
+    onExpenses: () -> Unit = {}
+) {
     val context = LocalContext.current
     // Context-aware: check if plan date matches today's date using device clock.
     val isToday = remember(plan.date) {
@@ -265,7 +280,7 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () ->
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
         // Title
@@ -306,7 +321,7 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () ->
             Text(
                 text = plan.date,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF444444)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.width(20.dp))
             Icon(
@@ -319,7 +334,7 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () ->
             Text(
                 text = "Est. ${'$'}${plan.estimatedCostPerPerson}/pp",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF444444)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -337,7 +352,7 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () ->
             Text(
                 text = "${plan.activityCount} Activities",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF444444)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -358,18 +373,27 @@ private fun PlanHeader(plan: Plan, onRsvp: () -> Unit = {}, onAddActivity: () ->
                     context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                 }
             )
-            ActionButton(
-                icon = Icons.Default.Add,
-                label = "Add Activity",
-                modifier = Modifier.weight(1f),
-                onClick = onAddActivity
-            )
-            ActionButton(
-                icon = Icons.Default.CheckCircle,
-                label = "RSVP",
-                modifier = Modifier.weight(1f),
-                onClick = onRsvp
-            )
+            if (plan.status == PlanStatus.PAST) {
+                ActionButton(
+                    icon = Icons.Default.AttachMoney,
+                    label = "Expenses",
+                    modifier = Modifier.weight(1f),
+                    onClick = onExpenses
+                )
+            } else {
+                ActionButton(
+                    icon = Icons.Default.Add,
+                    label = "Add Activity",
+                    modifier = Modifier.weight(1f),
+                    onClick = onAddActivity
+                )
+                ActionButton(
+                    icon = Icons.Default.CheckCircle,
+                    label = "RSVP",
+                    modifier = Modifier.weight(1f),
+                    onClick = onRsvp
+                )
+            }
         }
     }
 }
@@ -428,7 +452,7 @@ private fun ParticipantsSection(participants: List<Participant>, onInvite: () ->
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFFF5F5F5))
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
         Text(
@@ -448,8 +472,8 @@ private fun ParticipantsSection(participants: List<Participant>, onInvite: () ->
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White)
-                    .border(1.5.dp, Color(0xFFCCCCCC), RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                     .clickable { onInvite() },
                 contentAlignment = Alignment.Center
             ) {
@@ -466,8 +490,15 @@ private fun ParticipantsSection(participants: List<Participant>, onInvite: () ->
 
 @Composable
 private fun ParticipantAvatar(participant: Participant) {
-    val bgColor = avatarColors.getOrElse(participant.avatarColorIndex) { CoralLight }
-    val textColor = if (participant.avatarColorIndex <= 1) Color.White else Color(0xFF444444)
+    val bgColor = remember(participant.avatarColorIndex) {
+        Trace.beginSection("ParticipantAvatar.colors")
+        val c = avatarColors.getOrElse(participant.avatarColorIndex) { CoralLight }
+        Trace.endSection()
+        c
+    }
+    val textColor = remember(participant.avatarColorIndex) {
+        if (participant.avatarColorIndex <= 1) Color.White else Color(0xFF444444)
+    }
 
     Box(
         modifier = Modifier
@@ -541,7 +572,7 @@ private fun ActivityTimelineItem(activity: Activity, isLast: Boolean) {
                     modifier = Modifier
                         .width(2.dp)
                         .weight(1f)
-                        .background(Color(0xFFDDDDDD))
+                        .background(MaterialTheme.colorScheme.outlineVariant)
                 )
             }
         }
@@ -554,7 +585,7 @@ private fun ActivityTimelineItem(activity: Activity, isLast: Boolean) {
                 .fillMaxWidth()
                 .padding(bottom = if (isLast) 0.dp else 8.dp),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -579,7 +610,7 @@ private fun ActivityTimelineItem(activity: Activity, isLast: Boolean) {
                 Text(
                     text = activity.description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF666666)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))

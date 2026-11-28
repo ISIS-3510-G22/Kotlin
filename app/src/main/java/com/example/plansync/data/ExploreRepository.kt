@@ -6,8 +6,10 @@ import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.Source
-import org.json.JSONArray
-import org.json.JSONObject
+import com.example.plansync.data.dto.ExplorePlanDto
+import com.example.plansync.data.dto.toExploreDto
+import com.example.plansync.data.dto.toModel
+import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.tasks.await
@@ -19,11 +21,14 @@ class ExploreRepository(
 
     private val cacheFile = "explore_plans.json"
 
-    suspend fun getCachedPlans(): List<Plan> =
-        runCatching { storage.read(cacheFile).toJsonList { it.toPlan() } }.getOrDefault(emptyList())
+    private val json = Json { ignoreUnknownKeys = true }
+
+    suspend fun getCachedPlans(): List<Plan> = runCatching {
+        json.decodeFromString<List<ExplorePlanDto>>(storage.read(cacheFile) ?: "[]").map { it.toModel() }
+    }.getOrDefault(emptyList())
 
     suspend fun cachePlans(plans: List<Plan>) {
-        storage.write(cacheFile, plans.toJsonString { it.toJson() })
+        storage.write(cacheFile, json.encodeToString(plans.map { it.toExploreDto() }))
     }
 
     suspend fun getPlans(): Result<List<Plan>> = runCatching {
@@ -71,30 +76,4 @@ class ExploreRepository(
                     .map { it.id to (it.getDouble("expectedPrice") ?: 0.0).toInt() }
             }.getOrDefault(emptyList())
         }.toMap()
-
-    private fun Plan.toJson(): JSONObject = JSONObject()
-        .put("id", id)
-        .put("title", title)
-        .put("date", date)
-        .put("estimatedCostPerPerson", estimatedCostPerPerson)
-        .put("participantIds", JSONArray(participants.map { it.id }))
-        .put("category", category)
-        .put("planType", planType)
-        .put("activityIds", JSONArray(activityIds))
-        .put("tags", JSONArray(tags))
-
-    private fun JSONObject.toPlan(): Plan = Plan(
-        id = getString("id"),
-        title = getString("title"),
-        date = getString("date"),
-        estimatedCostPerPerson = getInt("estimatedCostPerPerson"),
-        participants = getJSONArray("participantIds").toStringList()
-            .mapIndexed { i, id -> Participant(id = id, initials = "", avatarColorIndex = i % 5) },
-        activities = emptyList(),
-        status = PlanStatus.CONFIRMED,
-        category = getString("category"),
-        planType = getString("planType"),
-        activityIds = getJSONArray("activityIds").toStringList(),
-        tags = getJSONArray("tags").toStringList()
-    )
 }

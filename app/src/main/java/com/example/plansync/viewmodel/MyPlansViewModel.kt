@@ -7,6 +7,7 @@ import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.PlanSnapshotRepository
 import com.example.plansync.data.ReviewQueueRepository
 import com.example.plansync.data.ReviewRepository
+import com.example.plansync.data.SplitRepository
 import com.example.plansync.data.WeatherRepository
 import com.example.plansync.model.PendingAction
 import com.example.plansync.model.Plan
@@ -14,7 +15,10 @@ import com.example.plansync.model.PlanStatus
 import com.example.plansync.model.RsvpStatus
 import com.example.plansync.service.NetworkMonitor
 import com.example.plansync.service.OfflineSyncService
+import com.example.plansync.service.SplitCalculator
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +34,7 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
     private val reviewRepository = ReviewRepository()
     private val snapshotRepository = PlanSnapshotRepository()
     private val reviewQueueRepository = ReviewQueueRepository()
+    private val splitRepository = SplitRepository()
     private val networkMonitor = NetworkMonitor.get(application)
 
     data class UiState(
@@ -48,7 +53,9 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
         val isOnline: Boolean = true,
         val showingSavedPlans: Boolean = false,
         val savedPlansError: String? = null,
-        val reviewQueueError: String? = null
+        val reviewQueueError: String? = null,
+        val overduePlanIds: Set<String> = emptySet(),
+        val inviteWaitDays: Map<String, Int> = emptyMap()
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -107,6 +114,7 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
 
+            shown.onSuccess { plans -> loadOverduePlans(plans) }
             withContext(Dispatchers.Main) {
                 shown
                     .onSuccess { plans -> _uiState.update { it.copy(allPlans = plans, showingSavedPlans = fromSaved) } }
@@ -135,8 +143,52 @@ class MyPlansViewModel(application: Application) : AndroidViewModel(application)
             val filtered = withContext(Dispatchers.Default) {
                 plansForTab(current.allPlans, current.selectedTab)
             }
+            val waitDays = withContext(Dispatchers.Default) {
+                buildInviteWaitDays(current.allPlans)
+            }
             withContext(Dispatchers.Main) {
-                _uiState.update { it.copy(isLoading = false, filteredPlans = filtered) }
+                _uiState.update { it.copy(isLoading = false, filteredPlans = filtered, inviteWaitDays = waitDays) }
+            }
+        }
+    }
+
+    private fun buildInviteWaitDays(plans: List<Plan>): Map<String, Int> {
+        val myId = splitRepository.currentUserId ?: return emptyMap()
+        val now = System.currentTimeMillis()
+        val result = mutableMapOf<String, Int>()
+        for (plan in plans) {
+            if (plan.status != PlanStatus.PENDING_INVITE) continue
+            val planDate = plan.dateTime
+            if (planDate != null && planDate.time < now) continue
+            val mine = plan.invitations.find { it.userId == myId } ?: continue
+            if (mine.rsvp != RsvpStatus.INVITED) continue
+            val invitedAt = mine.invitedAt ?: continue
+            val days = ((now - invitedAt.time) / 86_400_000L).toInt()
+            result[plan.id] = maxOf(days, 0)
+        }
+        return result
+    }
+
+    private fun loadOverduePlans(plans: List<Plan>) {
+        val myId = splitRepository.currentUserId ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val overdueIds = plans
+                .filter { it.status == PlanStatus.PAST && SplitCalculator.daysOverdue(it.dateTime) != null }
+                .map { plan ->
+                    async {
+                        val expenses = async { OfflineSyncService.loadExpenses(plan.id).getOrNull() }
+                        val settlements = async { OfflineSyncService.loadSettlements(plan.id).getOrNull() }
+                        val e = expenses.await() ?: return@async null
+                        val s = settlements.await() ?: return@async null
+                        val splits = SplitCalculator.buildSplits(myId, e, s) + SplitCalculator.buildOwedToMe(myId, e, s)
+                        plan.id.takeIf { splits.any { split -> !split.paid } }
+                    }
+                }
+                .awaitAll()
+                .filterNotNull()
+                .toSet()
+            withContext(Dispatchers.Main) {
+                _uiState.update { it.copy(overduePlanIds = overdueIds) }
             }
         }
     }

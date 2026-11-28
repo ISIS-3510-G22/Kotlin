@@ -9,6 +9,7 @@ import com.example.plansync.model.Participant
 import com.example.plansync.model.Plan
 import com.example.plansync.model.PlanStatus
 import com.example.plansync.model.RsvpStatus
+import com.example.plansync.service.PerfTrace
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import java.util.UUID
@@ -74,12 +75,28 @@ class PlanRepository(
         }
     }
 
+    suspend fun getGoingIds(planId: String): Result<List<String>> = runCatching {
+        val doc = withTimeout(8_000) {
+            PerfTrace.traced("ExpenseForm.firestoreRead") {
+                db.collection("plans").document(planId).get(Source.SERVER).await()
+            }
+        }
+        if (!doc.exists()) throw Exception("Plan not found.")
+        parseInvitations(doc).filter { it.rsvp == RsvpStatus.GOING }.map { it.userId }
+    }
+
+    suspend fun getPlanDate(planId: String, source: Source = Source.DEFAULT): Result<Date?> = runCatching {
+        db.collection("plans").document(planId).get(source).await().getTimestamp("date")?.toDate()
+    }
+
     suspend fun getPlan(planId: String): Result<Plan> {
         // IO: force server fetch, skip Firestore's local cache; 8s timeout then fall back to Room
         val planDoc: DocumentSnapshot? = try {
             withTimeout(8_000) {
                 withContext(Dispatchers.IO) {
-                    db.collection("plans").document(planId).get(Source.SERVER).await()
+                    PerfTrace.traced("ExpenseForm.firestoreRead") {
+                        db.collection("plans").document(planId).get(Source.SERVER).await()
+                    }
                 }
             }
         } catch (_: Exception) { null }
@@ -91,7 +108,7 @@ class PlanRepository(
         val activityIds = (planDoc.get("activityIds") as? List<*>).orEmpty().filterIsInstance<String>()
         // Fetch all activities in parallel instead of one-by-one.
         val activities = coroutineScope {
-            activityIds.map { actId -> async(Dispatchers.IO) { fetchActivity(actId) } }.awaitAll()
+            activityIds.map { actId -> async(Dispatchers.IO) { PerfTrace.traced("ExpenseForm.firestoreRead") { fetchActivity(actId) } } }.awaitAll()
         }.filterNotNull()
 
         val uid = auth.currentUser?.uid

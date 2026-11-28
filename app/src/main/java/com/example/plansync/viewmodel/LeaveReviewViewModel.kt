@@ -10,6 +10,7 @@ import com.example.plansync.data.ReviewRepository
 import com.example.plansync.model.PendingReview
 import com.example.plansync.model.PlanStatus
 import com.example.plansync.service.NetworkMonitor
+import com.example.plansync.service.OfflineSyncService
 import java.util.Date
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -124,7 +125,10 @@ class LeaveReviewViewModel(application: Application) : AndroidViewModel(applicat
 
             if (!networkMonitor.isCurrentlyOnline()) {
                 queueRepository.add(PendingReview(planId, current.rating, current.comment.trim()))
-                    .onSuccess { _uiState.update { it.copy(isSaving = false, didSave = true) } }
+                    .onSuccess {
+                        OfflineSyncService.notifyQueued("Your review")
+                        _uiState.update { it.copy(isSaving = false, didSave = true) }
+                    }
                     .onFailure { error -> _uiState.update { it.copy(isSaving = false, saveErrorMessage = error.message) } }
                 return@launch
             }

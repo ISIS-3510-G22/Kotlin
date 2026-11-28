@@ -1,6 +1,7 @@
 package com.example.plansync.ui
 
 import android.Manifest
+import android.os.Trace
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -56,6 +57,7 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -93,9 +95,18 @@ fun CreatePlanScreen(
     origin: String? = null,
     sourceId: String? = null,
     onBack: () -> Unit = {},
-    onSaved: () -> Unit = {}
+    onSaved: () -> Unit = {},
+    onDrafts: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    val recommended = remember(uiState.recommendedActivities, uiState.selectedActivities) {
+        Trace.beginSection("CreatePlan.recommendedFilter")
+        val selectedIds = uiState.selectedActivities.mapTo(HashSet()) { it.id }
+        val result = uiState.recommendedActivities.filter { it.id !in selectedIds }
+        Trace.endSection()
+        result
+    }
 
     LaunchedEffect(preselectedActivityId) {
         if (preselectedActivityId != null) viewModel.preSelectActivity(preselectedActivityId)
@@ -208,7 +219,7 @@ fun CreatePlanScreen(
         containerColor = Color(0xFFF5F5F5),
         topBar = {
             Column {
-                CreatePlanTopBar(onBack = onBack)
+                CreatePlanTopBar(onBack = onBack, onDrafts = onDrafts)
                 OfflineBanner(isOnline = uiState.isOnline, message = "You're offline — plan will save when reconnected")
             }
         },
@@ -330,9 +341,9 @@ fun CreatePlanScreen(
                 FormSectionLabel("PARTICIPANTS")
                 Spacer(Modifier.height(6.dp))
                 FormTextField(
-                    value = uiState.participantCount.toString(),
-                    onValueChange = { viewModel.onParticipantCountChange(it.filter(Char::isDigit).toIntOrNull() ?: 1) },
-                    placeholder = "Number of people",
+                    value = uiState.participantText,
+                    onValueChange = viewModel::onParticipantCountChange,
+                    placeholder = "1",
                     keyboardType = KeyboardType.Number
                 )
             }
@@ -414,9 +425,6 @@ fun CreatePlanScreen(
                 }
             }
 
-            val recommended = uiState.recommendedActivities.filter { rec ->
-                uiState.selectedActivities.none { it.id == rec.id }
-            }
             if (recommended.isNotEmpty()) {
                 item {
                     FormSectionLabel("RECOMMENDED FOR YOU")
@@ -546,7 +554,7 @@ private fun ActivityPickerDialog(
 // ── Top bar ────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun CreatePlanTopBar(onBack: () -> Unit) {
+private fun CreatePlanTopBar(onBack: () -> Unit, onDrafts: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -564,7 +572,10 @@ private fun CreatePlanTopBar(onBack: () -> Unit) {
             Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(12.dp))
-        Text("Create Plan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("Create Plan", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        androidx.compose.material3.TextButton(onClick = onDrafts) {
+            Text("Drafts", color = Coral, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 

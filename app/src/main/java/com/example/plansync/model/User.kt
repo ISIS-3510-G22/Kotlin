@@ -13,4 +13,6 @@ data class User(
     val phone: String = "",
     val photoUrl: String = "",
     val reimbursementMethods: List<PaymentMethod> = emptyList()
-)
+) {
+    val fullName: String get() = "$name $lastName".trim()
+}

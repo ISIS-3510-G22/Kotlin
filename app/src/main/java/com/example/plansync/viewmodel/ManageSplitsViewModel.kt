@@ -3,27 +3,35 @@ package com.example.plansync.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.plansync.data.CrewRepository
+import com.example.plansync.data.PlanRepository
 import com.example.plansync.data.SplitRepository
-import com.example.plansync.model.Expense
-import com.example.plansync.model.Settlement
+import com.example.plansync.model.PendingAction
 import com.example.plansync.model.Split
+import com.example.plansync.service.OfflineSyncService
+import com.example.plansync.service.SplitCalculator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-
-private const val PAYMENT_TOLERANCE = 0.01
 
 class ManageSplitsViewModel(
     private val splitRepository: SplitRepository = SplitRepository(),
-    private val crewRepository: CrewRepository = CrewRepository()
+    private val crewRepository: CrewRepository = CrewRepository(),
+    private val planRepository: PlanRepository = PlanRepository()
 ) : ViewModel() {
+
+    enum class Tab { I_OWE, OWED_TO_ME }
 
     data class UiState(
         val splits: List<Split> = emptyList(),
+        val owedToMe: List<Split> = emptyList(),
+        val selectedTab: Tab = Tab.I_OWE,
+        val daysOverdue: Int? = null,
         val names: Map<String, String> = emptyMap(),
         val isLoading: Boolean = false,
+        val isOnline: Boolean = true,
         val errorMessage: String? = null,
         val isSaving: Boolean = false,
         val saveErrorMessage: String? = null
@@ -32,7 +40,23 @@ class ManageSplitsViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    private var currentPlanId: String? = null
+
+    init {
+        viewModelScope.launch {
+            OfflineSyncService.isOnline.collect { online ->
+                val cameBackOnline = online && !_uiState.value.isOnline
+                _uiState.update { it.copy(isOnline = online) }
+                if (cameBackOnline) {
+                    OfflineSyncService.syncNow()
+                    currentPlanId?.let(::load)
+                }
+            }
+        }
+    }
+
     fun load(planId: String) {
+        currentPlanId = planId
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
@@ -42,25 +66,35 @@ class ManageSplitsViewModel(
                 return@launch
             }
 
-            val expenses = splitRepository.getExpenses(planId).getOrElse { error ->
-                _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+            val expensesJob = async { OfflineSyncService.loadExpenses(planId) }
+            val settlementsJob = async { OfflineSyncService.loadSettlements(planId) }
+            val expenses = expensesJob.await().getOrElse { error ->
+                _uiState.update { it.copy(isLoading = false, errorMessage = loadErrorMessage(error)) }
                 return@launch
             }
-            val settlements = splitRepository.getSettlements(planId).getOrElse { error ->
-                _uiState.update { it.copy(isLoading = false, errorMessage = error.message) }
+            val settlements = settlementsJob.await().getOrElse { error ->
+                _uiState.update { it.copy(isLoading = false, errorMessage = loadErrorMessage(error)) }
                 return@launch
             }
 
-            val splits = buildSplits(myId, expenses, settlements)
-            val names = loadNames(splits)
+            val splits = SplitCalculator.buildSplits(myId, expenses, settlements)
+            val owedToMe = SplitCalculator.buildOwedToMe(myId, expenses, settlements)
+            val names = loadNames(splits + owedToMe)
+            val daysOverdue = SplitCalculator.daysOverdue(planRepository.getPlanDate(planId, OfflineSyncService.readSource()).getOrNull())
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     splits = sortByName(splits, names),
-                    names = names
+                    owedToMe = sortByName(owedToMe, names),
+                    names = names,
+                    daysOverdue = daysOverdue
                 )
             }
         }
+    }
+
+    fun onTabSelected(tab: Tab) {
+        _uiState.update { it.copy(selectedTab = tab) }
     }
 
     fun onPaidChange(planId: String, split: Split, paid: Boolean) {
@@ -69,7 +103,16 @@ class ManageSplitsViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, saveErrorMessage = null) }
 
-            val result = if (paid) {
+            val myId = splitRepository.currentUserId.orEmpty()
+            val result = if (!OfflineSyncService.isOnlineNow()) {
+                val action = if (paid) {
+                    PendingAction.AddSettlement(planId, myId, split.personId, split.amount - split.paidSoFar)
+                } else {
+                    PendingAction.DeleteMySettlementsTo(planId, myId, split.personId)
+                }
+                OfflineSyncService.enqueue(action)
+                Result.success(Unit)
+            } else if (paid) {
                 splitRepository.addSettlement(planId, split.personId, split.amount - split.paidSoFar)
             } else {
                 splitRepository.deleteMySettlementsTo(planId, split.personId)
@@ -93,44 +136,14 @@ class ManageSplitsViewModel(
         }
     }
 
-    private fun buildSplits(myId: String, expenses: List<Expense>, settlements: List<Settlement>): List<Split> {
-        val netDebt = mutableMapOf<String, Double>()
-
-        for (expense in expenses) {
-            if (expense.splitAmongIds.isEmpty()) continue
-            val share = expense.value / expense.splitAmongIds.size
-            for (debtorId in expense.splitAmongIds) {
-                if (debtorId == expense.paidById) continue
-                if (debtorId == myId) {
-                    netDebt[expense.paidById] = (netDebt[expense.paidById] ?: 0.0) + share
-                } else if (expense.paidById == myId) {
-                    netDebt[debtorId] = (netDebt[debtorId] ?: 0.0) - share
-                }
-            }
-        }
-
-        for (settlement in settlements) {
-            if (settlement.toId == myId && settlement.fromId != myId) {
-                netDebt[settlement.fromId] = (netDebt[settlement.fromId] ?: 0.0) + settlement.amount
-            }
-        }
-
-        val splits = mutableListOf<Split>()
-        for ((personId, amount) in netDebt) {
-            if (personId.isBlank() || amount <= PAYMENT_TOLERANCE) continue
-            val paidSoFar = settlements
-                .filter { it.fromId == myId && it.toId == personId }
-                .sumOf { it.amount }
-            splits.add(Split(personId, amount, paidSoFar, paidSoFar >= amount - PAYMENT_TOLERANCE))
-        }
-        return splits
-    }
+    private fun loadErrorMessage(error: Throwable): String? =
+        if (error.message == SplitRepository.CONNECT_TO_LOAD) "Connect to the internet to load this plan's splits." else error.message
 
     private suspend fun loadNames(splits: List<Split>): Map<String, String> {
         val personIds = splits.map { it.personId }.distinct()
         if (personIds.isEmpty()) return emptyMap()
 
-        val users = crewRepository.getUsersByIds(personIds).getOrElse { return emptyMap() }
+        val users = crewRepository.getUsersByIds(personIds, OfflineSyncService.readSource()).getOrElse { return emptyMap() }
         return users.filter { it.name.isNotBlank() }.associate { it.id to it.name }
     }
 

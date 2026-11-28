@@ -19,11 +19,12 @@ data class PlanEntity(
     val category: String
 )
 
-// Each activity belonging to a plan — keyed by activity id + planId.
-@Entity(tableName = "plan_activities")
+// Each activity belonging to a plan — composite key (planId, id) so the
+// same activity can belong to several plans without overwriting rows.
+@Entity(tableName = "plan_activities", primaryKeys = ["planId", "id"])
 data class PlanActivityEntity(
-    @PrimaryKey val id: String,
     val planId: String,
+    val id: String,
     val name: String,
     val category: String,
     val description: String,

@@ -12,6 +12,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldPath
+import com.google.firebase.firestore.Source
 import com.google.firebase.firestore.Query
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -114,7 +115,7 @@ class CrewRepository(
         }
     }
 
-    suspend fun getUsersByIds(ids: List<String>): Result<List<User>> {
+    suspend fun getUsersByIds(ids: List<String>, source: Source = Source.DEFAULT): Result<List<User>> {
         val found = mutableMapOf<String, User>()
         for (id in ids.distinct()) {
             val cached = userCache.get(id)
@@ -123,7 +124,7 @@ class CrewRepository(
 
         val missingIds = ids.distinct().filter { it !in found }
         for (chunk in missingIds.chunked(30)) {
-            val chunkUsers = getUsersChunk(chunk).getOrElse { return Result.failure(it) }
+            val chunkUsers = getUsersChunk(chunk, source).getOrElse { return Result.failure(it) }
             for (user in chunkUsers) {
                 found[user.id] = user
                 userCache.put(user.id, user)
@@ -364,10 +365,10 @@ class CrewRepository(
     suspend fun getPhotoUrls(ids: List<String>): Result<Map<String, String>> =
         getUsersByIds(ids).map { users -> users.associate { it.id to it.photoUrl } }
 
-    private suspend fun getUsersChunk(ids: List<String>): Result<List<User>> =
+    private suspend fun getUsersChunk(ids: List<String>, source: Source): Result<List<User>> =
         suspendCancellableCoroutine { continuation ->
             users.whereIn(FieldPath.documentId(), ids)
-                .get()
+                .get(source)
                 .addOnSuccessListener { snapshot ->
                     continuation.resume(Result.success(snapshot.documents.map { it.toUser() }))
                 }

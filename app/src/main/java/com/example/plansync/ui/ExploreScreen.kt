@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +37,8 @@ fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (St
                 onMyActivitiesSelected: () -> Unit = {}, onMyCrewSelected: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedNavIndex by remember { mutableIntStateOf(0) }
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    val hasActiveFilters = uiState.selectedPlanType != "All" || uiState.selectedPrice != "All"
 
     LaunchedEffect(Unit) {
         viewModel.loadPlans()
@@ -80,6 +83,8 @@ fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (St
                 SearchRow(
                     query = uiState.searchQuery,
                     onQueryChange = viewModel::onSearchQueryChange,
+                    filtersHighlighted = showFilters || hasActiveFilters,
+                    onFiltersClick = { showFilters = !showFilters },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                 )
             }
@@ -92,7 +97,7 @@ fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (St
                 )
             }
 
-            item {
+            if (showFilters) item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -180,6 +185,8 @@ fun ExploreScreen(viewModel: ExploreViewModel = viewModel(), onPlanSelected: (St
 private fun SearchRow(
     query: String,
     onQueryChange: (String) -> Unit,
+    filtersHighlighted: Boolean,
+    onFiltersClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -201,15 +208,16 @@ private fun SearchRow(
             )
         )
         Surface(
+            onClick = onFiltersClick,
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.secondary,
+            color = if (filtersHighlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
             modifier = Modifier.size(56.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = Icons.Filled.Tune,
-                    contentDescription = "Filters",
-                    tint = MaterialTheme.colorScheme.onSecondary
+                    contentDescription = if (filtersHighlighted) "Hide filters" else "Show filters",
+                    tint = if (filtersHighlighted) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondary
                 )
             }
         }

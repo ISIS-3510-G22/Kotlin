@@ -5,6 +5,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -78,6 +80,7 @@ fun EditProfileScreen(
     )
 
     Scaffold(
+        modifier = Modifier.imePadding(),
         topBar = {
             Column {
                 Row(
@@ -237,7 +240,8 @@ fun EditProfileScreen(
             EditProfileField(
                 label = "PHONE NUMBER",
                 value = uiState.phone,
-                onValueChange = viewModel::onPhoneChange
+                onValueChange = viewModel::onPhoneChange,
+                keyboardType = KeyboardType.Phone
             )
 
             SectionLabel("REIMBURSEMENT METHODS", topPadding = 24.dp)
@@ -306,7 +310,8 @@ private fun SectionLabel(text: String, topPadding: Dp = 0.dp) {
 private fun EditProfileField(
     label: String,
     value: String,
-    onValueChange: (String) -> Unit
+    onValueChange: (String) -> Unit,
+    keyboardType: KeyboardType = KeyboardType.Text
 ) {
     Text(
         text = label,
@@ -319,6 +324,7 @@ private fun EditProfileField(
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = OutlinedTextFieldDefaults.colors(

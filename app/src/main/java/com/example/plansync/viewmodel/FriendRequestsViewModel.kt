@@ -9,11 +9,14 @@ import com.example.plansync.data.FriendRequestSnapshotRepository
 import com.example.plansync.model.FriendRequest
 import com.example.plansync.model.PendingFriendAnswer
 import com.example.plansync.service.NetworkMonitor
+import com.example.plansync.service.OfflineSyncService
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 class FriendRequestsViewModel(application: Application) : AndroidViewModel(application) {
@@ -82,35 +85,43 @@ class FriendRequestsViewModel(application: Application) : AndroidViewModel(appli
 
     private fun answer(request: FriendRequest, status: String) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true, actionError = null) }
+            withContext(NonCancellable) {
+                _uiState.update { it.copy(isSaving = true, actionError = null) }
 
-            if (!networkMonitor.isCurrentlyOnline()) {
-                queueRepository.add(PendingFriendAnswer(request.id, status))
-                    .onSuccess { removeRequest(request.id) }
-                    .onFailure { error -> _uiState.update { it.copy(actionError = error.message) } }
-            } else {
-                val result = withTimeoutOrNull(8_000) {
-                    if (status == "accepted") {
-                        repository.acceptFriendRequest(request.id)
-                    } else {
-                        repository.denyFriendRequest(request.id)
-                    }
-                }
-                if (result == null) {
+                if (!networkMonitor.isCurrentlyOnline()) {
                     queueRepository.add(PendingFriendAnswer(request.id, status))
-                        .onSuccess { removeRequest(request.id) }
-                        .onFailure { error -> _uiState.update { it.copy(actionError = error.message) } }
-                } else {
-                    result
                         .onSuccess {
-                            queueRepository.remove(request.id)
+                            OfflineSyncService.notifyQueued(if (status == "accepted") "Your friend request acceptance" else "Your friend request decline")
                             removeRequest(request.id)
                         }
                         .onFailure { error -> _uiState.update { it.copy(actionError = error.message) } }
+                } else {
+                    val result = withTimeoutOrNull(8_000) {
+                        if (status == "accepted") {
+                            repository.acceptFriendRequest(request.id)
+                        } else {
+                            repository.denyFriendRequest(request.id)
+                        }
+                    }
+                    if (result == null) {
+                        queueRepository.add(PendingFriendAnswer(request.id, status))
+                            .onSuccess {
+                                OfflineSyncService.notifyQueued(if (status == "accepted") "Your friend request acceptance" else "Your friend request decline")
+                                removeRequest(request.id)
+                            }
+                            .onFailure { error -> _uiState.update { it.copy(actionError = error.message) } }
+                    } else {
+                        result
+                            .onSuccess {
+                                queueRepository.remove(request.id)
+                                removeRequest(request.id)
+                            }
+                            .onFailure { error -> _uiState.update { it.copy(actionError = error.message) } }
+                    }
                 }
-            }
 
-            _uiState.update { it.copy(isSaving = false) }
+                _uiState.update { it.copy(isSaving = false) }
+            }
         }
     }
 

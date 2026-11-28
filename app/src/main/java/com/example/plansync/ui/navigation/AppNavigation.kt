@@ -28,6 +28,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.example.plansync.ui.ActivityDetailScreen
 import com.example.plansync.ui.AddFriendScreen
+import com.example.plansync.ui.MyDraftsScreen
+import com.example.plansync.ui.MyDebtsScreen
+import com.example.plansync.ui.PlanExpensesScreen
+import com.example.plansync.ui.ExpenseFormScreen
 import com.example.plansync.ui.AddPaymentMethodScreen
 import com.example.plansync.ui.AddToPlanScreen
 import com.example.plansync.ui.CreateActivityScreen
@@ -56,15 +60,17 @@ object Routes {
     const val MY_PLANS    = "my_plans"
     const val PLAN_DETAIL = "plan_detail/{planId}"
     const val INVITE      = "invite/{planId}"
-    const val CREATE_PLAN = "create_plan?activityId={activityId}&origin={origin}&sourceId={sourceId}"
-    fun createPlan(activityId: String? = null, origin: String? = null, sourceId: String? = null): String {
+    const val CREATE_PLAN = "create_plan?activityId={activityId}&origin={origin}&sourceId={sourceId}&draftId={draftId}"
+    fun createPlan(activityId: String? = null, origin: String? = null, sourceId: String? = null, draftId: String? = null): String {
         val params = listOfNotNull(
             activityId?.let { "activityId=$it" },
             origin?.let     { "origin=$it" },
-            sourceId?.let   { "sourceId=$it" }
+            sourceId?.let   { "sourceId=$it" },
+            draftId?.let    { "draftId=$it" }
         )
         return if (params.isEmpty()) "create_plan" else "create_plan?${params.joinToString("&")}"
     }
+    const val MY_DRAFTS = "my_drafts"
     const val ACTIVITIES  = "activities"
     const val GROUPS      = "groups"
     const val PROFILE     = "profile"
@@ -83,6 +89,9 @@ object Routes {
     const val USER_DETAIL = "user_detail/{userId}"
     const val LEAVE_REVIEW = "leave_review/{planId}"
     const val MANAGE_SPLITS = "manage_splits/{planId}"
+    const val PLAN_EXPENSES = "plan_expenses/{planId}"
+    const val EXPENSE_FORM = "expense_form/{planId}?expenseId={expenseId}"
+    const val MY_DEBTS = "my_debts"
 
     fun planDetail(planId: String) = "plan_detail/$planId"
     fun invite(planId: String)     = "invite/$planId"
@@ -94,6 +103,9 @@ object Routes {
     fun userDetail(userId: String) = "user_detail/$userId"
     fun leaveReview(planId: String) = "leave_review/$planId"
     fun manageSplits(planId: String) = "manage_splits/$planId"
+    fun planExpenses(planId: String) = "plan_expenses/$planId"
+    fun expenseForm(planId: String, expenseId: String? = null) =
+        if (expenseId == null) "expense_form/$planId" else "expense_form/$planId?expenseId=$expenseId"
 }
 
 
@@ -219,8 +231,42 @@ fun MainNavHost(
                 planId = planId,
                 onBack = { navController.popBackStack() },
                 onInvite = { id -> navController.navigate(Routes.invite(id)) },
-                onAddActivity = { navController.navigate(Routes.ACTIVITIES) }
+                onAddActivity = { navController.navigate(Routes.ACTIVITIES) },
+                onExpenses = { id -> navController.navigate(Routes.planExpenses(id)) }
             )
+        }
+
+        composable(
+            route = Routes.PLAN_EXPENSES,
+            arguments = listOf(navArgument("planId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val planId = backStackEntry.arguments?.getString("planId").orEmpty()
+            PlanExpensesScreen(
+                planId = planId,
+                onBack = { navController.popBackStack() },
+                onAddExpense = { navController.navigate(Routes.expenseForm(planId)) },
+                onEditExpense = { expenseId -> navController.navigate(Routes.expenseForm(planId, expenseId)) },
+                onManageSplits = { navController.navigate(Routes.manageSplits(planId)) }
+            )
+        }
+
+        composable(
+            route = Routes.EXPENSE_FORM,
+            arguments = listOf(
+                navArgument("planId") { type = NavType.StringType },
+                navArgument("expenseId") { type = NavType.StringType; nullable = true; defaultValue = null }
+            )
+        ) { backStackEntry ->
+            ExpenseFormScreen(
+                planId = backStackEntry.arguments?.getString("planId").orEmpty(),
+                expenseId = backStackEntry.arguments?.getString("expenseId"),
+                onBack = { navController.popBackStack() },
+                onDone = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.MY_DEBTS) {
+            MyDebtsScreen(onBack = { navController.popBackStack() })
         }
 
         composable(
@@ -239,7 +285,8 @@ fun MainNavHost(
             arguments = listOf(
                 navArgument("activityId") { type = NavType.StringType; nullable = true; defaultValue = null },
                 navArgument("origin")     { type = NavType.StringType; nullable = true; defaultValue = null },
-                navArgument("sourceId")   { type = NavType.StringType; nullable = true; defaultValue = null }
+                navArgument("sourceId")   { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("draftId")    { type = NavType.StringType; nullable = true; defaultValue = null }
             )
         ) { backStackEntry ->
             val activityId = backStackEntry.arguments?.getString("activityId")
@@ -249,8 +296,22 @@ fun MainNavHost(
                 preselectedActivityId = activityId,
                 origin                = origin,
                 sourceId              = sourceId,
-                onBack  = { navController.popBackStack() },
-                onSaved = { navController.popBackStack() }
+                onBack    = { navController.popBackStack() },
+                onSaved   = { navController.popBackStack() },
+                onDrafts  = { navController.navigate(Routes.MY_DRAFTS) }
+            )
+        }
+
+        composable(Routes.MY_DRAFTS) {
+            MyDraftsScreen(
+                onBack   = { navController.popBackStack() },
+                onResume = { draftId ->
+                    navController.navigate(Routes.createPlan(draftId = draftId)) {
+                        // Replace the existing Create Plan entry (and My Drafts above it) so
+                        // Resume does not stack a second Create Plan on the back stack.
+                        popUpTo(Routes.CREATE_PLAN) { inclusive = true }
+                    }
+                }
             )
         }
 
@@ -386,7 +447,8 @@ fun MainNavHost(
                 onMyPlansSelected = { navController.navigate(Routes.MY_PLANS) },
                 onMyActivitiesSelected = { navController.navigate(Routes.ACTIVITIES) },
                 onMyCrewSelected = { navController.navigate(Routes.GROUPS) },
-                onEditProfile = { navController.navigate(Routes.EDIT_PROFILE) }
+                onEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
+                onMyDebts = { navController.navigate(Routes.MY_DEBTS) }
             )
         }
 
