@@ -2,6 +2,7 @@ package com.example.plansync.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,7 +80,7 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(CoralLight),
+            .background(if (isSystemInDarkTheme()) MaterialTheme.colorScheme.background else CoralLight),
         contentAlignment = Alignment.Center
     ) {
         OfflineBanner(
@@ -92,7 +93,7 @@ fun LoginScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(
@@ -118,7 +119,7 @@ fun LoginScreen(
                     text = "PlanSync",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1C1B1F)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -252,7 +253,7 @@ fun LoginScreen(
                     Text(
                         text = "Don't have an account?",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF444444)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     TextButton(onClick = onSignUpClick) {
                         Text(
