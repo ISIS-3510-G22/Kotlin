@@ -20,7 +20,7 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     data class UiState(
         val searchQuery: String = "",
         val categoryOptions: List<String> = listOf("All"),
-        val planTypeOptions: List<String> = listOf("All", "Solo", "Couple", "Group", "Family"),
+        val planTypeOptions: List<String> = listOf("All", "Solo", "Couple", "Group"),
         val priceOptions: List<String> = listOf("All", "Free", "$", "$$", "$$$"),
         val selectedCategory: String = "All",
         val selectedPlanType: String = "All",
@@ -95,7 +95,14 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
         plans.filter { plan ->
             (state.searchQuery.isBlank() || plan.title.contains(state.searchQuery, ignoreCase = true)) &&
                 (state.selectedCategory == "All" || state.selectedCategory in plan.tags) &&
-                (state.selectedPlanType == "All" || plan.planType == state.selectedPlanType) &&
+                matchesPlanType(plan.participants.size, state.selectedPlanType) &&
                 (state.selectedPrice == "All" || plan.priceTier == state.selectedPrice)
         }
+
+    private fun matchesPlanType(people: Int, planType: String): Boolean = when (planType) {
+        "Solo" -> people == 1
+        "Couple" -> people >= 2
+        "Group" -> people >= 3
+        else -> true
+    }
 }
