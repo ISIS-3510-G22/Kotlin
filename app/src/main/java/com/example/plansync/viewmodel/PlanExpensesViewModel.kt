@@ -56,7 +56,7 @@ class PlanExpensesViewModel(
                 _uiState.update { it.copy(isLoading = false, errorMessage = message) }
                 return@launch
             }
-            val names = crewRepository.getUsersByIds(expenses.map { it.paidById })
+            val names = crewRepository.getUsersByIds(expenses.map { it.paidById }, OfflineSyncService.readSource())
                 .getOrDefault(emptyList())
                 .associate { it.id to it.fullName }
 

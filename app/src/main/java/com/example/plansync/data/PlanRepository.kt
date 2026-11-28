@@ -75,8 +75,8 @@ class PlanRepository(
         }
     }
 
-    suspend fun getPlanDate(planId: String): Result<Date?> = runCatching {
-        db.collection("plans").document(planId).get().await().getTimestamp("date")?.toDate()
+    suspend fun getPlanDate(planId: String, source: Source = Source.DEFAULT): Result<Date?> = runCatching {
+        db.collection("plans").document(planId).get(source).await().getTimestamp("date")?.toDate()
     }
 
     suspend fun getPlan(planId: String): Result<Plan> {
