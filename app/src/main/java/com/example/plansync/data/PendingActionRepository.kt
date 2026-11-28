@@ -114,6 +114,11 @@ class PendingActionRepository(
                 .put("planId", planId)
                 .put("activityId", activityId)
                 .put("activityName", activityName)
+                .put("activityCategory", activityCategory)
+                .put("activityDescription", activityDescription)
+                .put("activityAddress", activityAddress)
+                .put("activityIconType", activityIconType)
+                .put("activityPrice", activityPrice)
                 .put("tags", JSONArray(tags))
             is PendingAction.CreatePlan -> json
                 .put("type", "create_plan")
@@ -224,6 +229,11 @@ class PendingActionRepository(
                 planId = getString("planId"),
                 activityId = getString("activityId"),
                 activityName = getString("activityName"),
+                activityCategory = optString("activityCategory", ""),
+                activityDescription = optString("activityDescription", ""),
+                activityAddress = optString("activityAddress", ""),
+                activityIconType = optString("activityIconType", "DEFAULT"),
+                activityPrice = optInt("activityPrice", 0),
                 tags = getJSONArray("tags").toStringList(),
                 id = id
             )

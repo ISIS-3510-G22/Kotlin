@@ -84,7 +84,17 @@ class AddToPlanViewModel(
 
             if (!OfflineSyncService.isOnlineNow()) {
                 OfflineSyncService.addActivityToPlanOffline(
-                    PendingAction.AddActivityToPlan(planId, activity.id, activity.name, activity.tags)
+                    PendingAction.AddActivityToPlan(
+                        planId              = planId,
+                        activityId          = activity.id,
+                        activityName        = activity.name,
+                        activityCategory    = activity.category,
+                        activityDescription = activity.description,
+                        activityAddress     = activity.address,
+                        activityIconType    = activity.iconType.name,
+                        activityPrice       = activity.price,
+                        tags                = activity.tags
+                    )
                 )
                 _uiState.update { it.copy(isSaving = false, didSave = true) }
                 return@launch
