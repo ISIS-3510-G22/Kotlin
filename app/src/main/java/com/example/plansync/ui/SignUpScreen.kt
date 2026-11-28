@@ -1,5 +1,6 @@
 package com.example.plansync.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -29,6 +30,8 @@ fun SignUpScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    BackHandler(onBack = onCancel)
+
     LaunchedEffect(uiState.createdUser) {
         if (uiState.createdUser != null) {
             onProfileCreated()
@@ -42,6 +45,7 @@ fun SignUpScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
