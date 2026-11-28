@@ -466,14 +466,14 @@ private fun inviteWaitLabel(days: Int): String = when (days) {
 
 private fun planDateText(plan: Plan): String {
     val dateTime = plan.dateTime ?: return plan.date
-    val pattern = if (plan.status == PlanStatus.PAST) "MMM d · h:mm a" else "MMM d"
-    return SimpleDateFormat(pattern, Locale.US).format(dateTime)
+    val format = if (plan.status == PlanStatus.PAST) pastDateFormat else upcomingDateFormat
+    return format.format(dateTime)
 }
 
 private fun rainChanceFor(plan: Plan, forecast: Map<String, Int>): Int? {
     if (plan.status != PlanStatus.CONFIRMED) return null
     val dateTime = plan.dateTime ?: return null
-    return forecast[SimpleDateFormat("yyyy-MM-dd", Locale.US).format(dateTime)]
+    return forecast[dayKeyFormat.format(dateTime)]
 }
 
 private fun reviewCountLabel(count: Int): String = if (count == 1) "1 review" else "$count reviews"
@@ -490,6 +490,12 @@ private val avatarColors = listOf(
 )
 
 private const val MAX_AVATARS_SHOWN = 3
+
+private val pastDateFormat = SimpleDateFormat("MMM d · h:mm a", Locale.US)
+
+private val upcomingDateFormat = SimpleDateFormat("MMM d", Locale.US)
+
+private val dayKeyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
 @Composable
 private fun ParticipantAvatarRow(participants: List<Participant>) {
